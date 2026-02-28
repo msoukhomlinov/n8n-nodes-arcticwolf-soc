@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.n8n.io)",
+      "WebSearch",
+      "WebFetch(domain:medium.com)",
+      "Bash(tail:*)",
+      "Bash(cd /c/temp/n8n/n8n-nodes-boilerplate && npm run typecheck 2>&1)",
+      "Bash(cd /c/temp/n8n/n8n-nodes-boilerplate && npm run lint 2>&1)",
+      "Bash(cd /c/temp/n8n/n8n-nodes-boilerplate && npm run typecheck && npm run build 2>&1)",
+      "Bash(cd /c/temp/n8n/n8n-nodes-boilerplate && npm test 2>&1)",
+      "Bash(cd /c/temp/n8n/n8n-nodes-boilerplate && npm run typecheck && npm run lint && npm run build && npm test 2>&1)",
+      "Bash(cd /c/temp/n8n/n8n-nodes-boilerplate && npm run build 2>&1)"
+    ]
+  }
+}
