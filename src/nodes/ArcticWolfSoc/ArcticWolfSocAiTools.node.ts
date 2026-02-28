@@ -13,23 +13,9 @@ import type {
 } from 'n8n-workflow';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { normaliseToolInputSchema } from './ai-tools/schema-normalizer.js';
-import { executeBoilerplateTool } from './ai-tools/tool-executor.js';
-import {
-  getEchoSchema,
-  getGetSchema,
-  getGetManySchema,
-  getCreateSchema,
-  getUpdateSchema,
-  getDeleteSchema,
-} from './ai-tools/schema-generator.js';
-import {
-  buildEchoDescription,
-  buildGetDescription,
-  buildGetManyDescription,
-  buildCreateDescription,
-  buildUpdateDescription,
-  buildDeleteDescription,
-} from './ai-tools/description-builders.js';
+import { executeArcticWolfSocTool } from './ai-tools/tool-executor.js';
+import { WRITE_OPERATIONS } from './constants.js';
+import { RESOURCE_OPERATIONS, OP_LABELS, OPERATION_REGISTRY } from './operations.registry.js';
 
 // ---------------------------------------------------------------------------
 // Build a toolkit class the n8n AI Agent recognises via instanceof check.
@@ -46,7 +32,7 @@ const { Toolkit: LangChainToolkitBase } = require('@langchain/classic/agents') a
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-class BoilerplateToolkit extends (LangChainToolkitBase as any) {
+class ArcticWolfSocToolkit extends (LangChainToolkitBase as any) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   declare tools: any[];
   constructor(toolList: DynamicStructuredTool[]) {
@@ -59,37 +45,22 @@ class BoilerplateToolkit extends (LangChainToolkitBase as any) {
   }
 }
 
-const WRITE_OPERATIONS = ['create', 'update', 'delete'];
-
-const RESOURCE_OPERATIONS: Record<string, string[]> = {
-  boilerplate: ['echo', 'get', 'getMany', 'create', 'update', 'delete'],
-};
-
-const OP_LABELS: Record<string, string> = {
-  echo: 'Echo',
-  get: 'Get by ID',
-  getMany: 'Get many (with filters)',
-  create: 'Create',
-  update: 'Update',
-  delete: 'Delete',
-};
-
 function formatResourceName(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-export class BoilerplateAiTools implements INodeType {
+export class ArcticWolfSocAiTools implements INodeType {
   description: INodeTypeDescription = {
-    displayName: 'Boilerplate AI Tools',
-    name: 'boilerplateAiTools',
-    icon: 'file:boilerplate.svg',
+    displayName: 'Arctic Wolf SOC AI Tools',
+    name: 'arcticWolfSocAiTools',
+    icon: 'file:arcticwolfsoc.svg',
     group: ['output'],
     version: 1,
-    description: 'Expose Boilerplate operations as individual AI tools for the AI Agent',
-    defaults: { name: 'Boilerplate AI Tools' },
+    description: 'Expose Arctic Wolf SOC operations as individual AI tools for the AI Agent',
+    defaults: { name: 'Arctic Wolf SOC AI Tools' },
     inputs: [],
     outputs: [{ type: 'ai_tool' as NodeConnectionType, displayName: 'Tools' }],
-    credentials: [{ name: 'exampleApi', required: false }],
+    credentials: [{ name: 'arcticWolfSocApi', required: true }],
     properties: [
       {
         displayName: 'Resource Name or ID',
@@ -121,7 +92,7 @@ export class BoilerplateAiTools implements INodeType {
         type: 'boolean',
         default: false,
         description:
-          'Whether to enable mutating tools (create, update, delete). When disabled, only read-only operations are exposed.',
+          'Whether to enable mutating tools (closeTicket, addComment). When disabled, only read-only operations are exposed.',
       },
     ],
   };
@@ -169,7 +140,9 @@ export class BoilerplateAiTools implements INodeType {
     if (!operations?.length)
       throw new NodeOperationError(this.getNode(), 'At least one operation must be selected');
 
-    const resourceLabel = formatResourceName(resource);
+    const credentials = await this.getCredentials('arcticWolfSocApi');
+    const region = credentials['region'] as string;
+
     const tools: DynamicStructuredTool[] = [];
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const supplyDataContext = this;
@@ -177,115 +150,23 @@ export class BoilerplateAiTools implements INodeType {
 
     for (const operation of operations) {
       if (WRITE_OPERATIONS.includes(operation) && !allowWriteOperations) continue;
-
-      const toolName = `${resource}_${operation}`;
-
-      switch (operation) {
-        case 'echo':
-          tools.push(
-            new DynamicStructuredTool({
-              name: toolName,
-              description: buildEchoDescription(),
-              schema: normaliseToolInputSchema(getEchoSchema()),
-              func: async (params: Record<string, unknown>) =>
-                executeBoilerplateTool(
-                  supplyDataContext as unknown as IExecuteFunctions,
-                  resource,
-                  operation,
-                  params,
-                ),
-            }),
-          );
-          break;
-
-        case 'get':
-          tools.push(
-            new DynamicStructuredTool({
-              name: toolName,
-              description: buildGetDescription(resourceLabel, resource),
-              schema: normaliseToolInputSchema(getGetSchema()),
-              func: async (params: Record<string, unknown>) =>
-                executeBoilerplateTool(
-                  supplyDataContext as unknown as IExecuteFunctions,
-                  resource,
-                  operation,
-                  params,
-                ),
-            }),
-          );
-          break;
-
-        case 'getMany':
-          tools.push(
-            new DynamicStructuredTool({
-              name: toolName,
-              description: buildGetManyDescription(resourceLabel, resource, referenceUtc),
-              schema: normaliseToolInputSchema(getGetManySchema()),
-              func: async (params: Record<string, unknown>) =>
-                executeBoilerplateTool(
-                  supplyDataContext as unknown as IExecuteFunctions,
-                  resource,
-                  operation,
-                  params,
-                ),
-            }),
-          );
-          break;
-
-        case 'create':
-          tools.push(
-            new DynamicStructuredTool({
-              name: toolName,
-              description: buildCreateDescription(resourceLabel, referenceUtc),
-              schema: normaliseToolInputSchema(getCreateSchema()),
-              func: async (params: Record<string, unknown>) =>
-                executeBoilerplateTool(
-                  supplyDataContext as unknown as IExecuteFunctions,
-                  resource,
-                  operation,
-                  params,
-                ),
-            }),
-          );
-          break;
-
-        case 'update':
-          tools.push(
-            new DynamicStructuredTool({
-              name: toolName,
-              description: buildUpdateDescription(resourceLabel, referenceUtc),
-              schema: normaliseToolInputSchema(getUpdateSchema()),
-              func: async (params: Record<string, unknown>) =>
-                executeBoilerplateTool(
-                  supplyDataContext as unknown as IExecuteFunctions,
-                  resource,
-                  operation,
-                  params,
-                ),
-            }),
-          );
-          break;
-
-        case 'delete':
-          tools.push(
-            new DynamicStructuredTool({
-              name: toolName,
-              description: buildDeleteDescription(resourceLabel),
-              schema: normaliseToolInputSchema(getDeleteSchema()),
-              func: async (params: Record<string, unknown>) =>
-                executeBoilerplateTool(
-                  supplyDataContext as unknown as IExecuteFunctions,
-                  resource,
-                  operation,
-                  params,
-                ),
-            }),
-          );
-          break;
-
-        default:
-          break;
-      }
+      const reg = OPERATION_REGISTRY[resource]?.[operation];
+      if (!reg) continue;
+      tools.push(
+        new DynamicStructuredTool({
+          name: `${resource}_${operation}`,
+          description: reg.buildDescription(referenceUtc),
+          schema: normaliseToolInputSchema(reg.getSchema()),
+          func: async (params: Record<string, unknown>) =>
+            executeArcticWolfSocTool(
+              supplyDataContext as unknown as IExecuteFunctions,
+              resource,
+              operation,
+              params,
+              region,
+            ),
+        }),
+      );
     }
 
     if (tools.length === 0) {
@@ -295,7 +176,7 @@ export class BoilerplateAiTools implements INodeType {
       );
     }
 
-    const toolkit = new BoilerplateToolkit(tools);
+    const toolkit = new ArcticWolfSocToolkit(tools);
     return { response: toolkit };
   }
 
@@ -314,8 +195,7 @@ export class BoilerplateAiTools implements INodeType {
       [
         {
           json: {
-            message:
-              'This is an AI Tool node. Connect it to an AI Agent node to use it.',
+            message: 'This is an AI Tool node. Connect it to an AI Agent node to use it.',
             configured: { resource, operations },
           } as IDataObject,
           pairedItem: { item: 0 },

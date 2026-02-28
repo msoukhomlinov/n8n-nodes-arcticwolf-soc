@@ -1,37 +1,75 @@
-# n8n Community Node Boilerplate (v1+)
+# n8n-nodes-arcticwolf-soc
 
-TypeScript boilerplate for building an n8n community node using the v1+ node standard.
+An n8n community node package for the **Arctic Wolf SOC** platform, providing access to the Ticket API and Organizations API.
 
 ## Requirements
+
 - Node.js >= 20.15
 - n8n v1+
 
 ## Installation
-Install in n8n via the GUI or manually:
+
+Install in n8n via the Community Nodes GUI, or manually:
+
 ```bash
-npm install n8n-nodes-example
+npm install n8n-nodes-arcticwolf-soc
 ```
 
-## Usage
-This package includes:
-- Example credential `ExampleApi`
-- Example node `Example`
+## Supported Resources & Operations
+
+### Ticket
+
+| Operation    | Description                                       |
+|--------------|---------------------------------------------------|
+| Get Many     | Retrieve tickets for an organization with filters |
+| Get Ticket   | Retrieve a single ticket by numeric ID            |
+| Close Ticket | Close a ticket, optionally adding a comment       |
+| Add Comment  | Add a comment to an existing ticket               |
+
+**Get Many filters:** status (OPEN, NEW, PENDING, HOLD, CLOSED), priority (LOW, NORMAL, HIGH, URGENT), type (QUESTION, INCIDENT, PROBLEM, TASK), assignee email, assignee first/last name, created/updated date ranges. Supports **Return All** (auto-pagination) or a manual **Limit** (1–100).
+
+### Organization
+
+| Operation | Description                                           |
+|-----------|-------------------------------------------------------|
+| Get Many  | Retrieve all organizations accessible to you          |
+
+**Get Many filters:** optionally scope results to child organizations of a given root organization UUID.
+
+## Credential Setup
+
+Create a credential of type **Arctic Wolf SOC API** with:
+
+- **Bearer Token** — the JWT token obtained from the Arctic Wolf portal or via the quick-start guide
+- **Region** — the Arctic Wolf region your account is hosted in (US001, US002, US003, EU001, AU001, CA001)
+
+The credential automatically injects `Authorization: Bearer <token>` on every request.
+
+> **API Documentation:** https://docs.arcticwolf.com/bundle/unlisted_documentation/page/ticket_api_quick_start_guide.html
+
+## AI Tools Node
+
+This package also includes an **Arctic Wolf SOC AI Tools** node that exposes all operations as LangChain `DynamicStructuredTool` instances for use with the n8n AI Agent. Connect it to an AI Agent node to allow the agent to query and manage Arctic Wolf tickets autonomously.
+
+Write operations (Close Ticket, Add Comment) are disabled by default and must be explicitly enabled with the **Allow Write Operations** toggle.
+
+## OpenAPI Specs
+
+The `docs/` folder in this repository contains the OpenAPI YAML specifications for both APIs:
+
+- `docs/ticket_api.yaml` — Arctic Wolf Ticket API
+- `docs/organizations_api.yaml` — Arctic Wolf Organizations API
 
 ## Development
+
 ```bash
 npm install
-npm run build
-npm run lint
-npm run typecheck
-```
-
-## Publish
-Ensure the package name follows `n8n-nodes-*` (or `@scope/n8n-nodes-*`), then:
-```bash
-npm publish --access public
+npm run build       # compile + copy SVG icons
+npm run typecheck   # strict TypeScript check
+npm run lint        # ESLint
+npm test            # Jest test suite
 ```
 
 ## License
+
 Apache-2.0 © Max Soukhomlinov
-
-

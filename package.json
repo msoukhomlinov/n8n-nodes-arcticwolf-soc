@@ -1,23 +1,27 @@
 {
-  "name": "n8n-nodes-boilerplate",
+  "name": "n8n-nodes-arcticwolf-soc",
   "version": "0.1.0",
-  "description": "Boilerplate for an n8n community node (v1+).",
-  "author": "Max Soukhomlinov <maxs@intellectit.com.au>",
+  "description": "n8n community node for Arctic Wolf SOC (Ticket API & Organizations API)",
+  "author": "Max Soukhomlinov",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/msoukhomlinov/n8n-nodes-boilerplate.git"
+    "url": "git+https://github.com/msoukhomlinov/n8n-nodes-arcticwolf-soc.git"
   },
   "bugs": {
-    "url": "https://github.com/msoukhomlinov/n8n-nodes-boilerplate/issues"
+    "url": "https://github.com/msoukhomlinov/n8n-nodes-arcticwolf-soc/issues"
   },
-  "homepage": "https://github.com/msoukhomlinov/n8n-nodes-boilerplate#readme",
+  "homepage": "https://github.com/msoukhomlinov/n8n-nodes-arcticwolf-soc#readme",
   "keywords": [
     "n8n",
     "n8n-community-node",
     "n8n-community-node-package",
     "workflow",
-    "integration"
+    "integration",
+    "arcticwolf",
+    "soc",
+    "security",
+    "ticketing"
   ],
   "engines": {
     "node": ">=20.15"
@@ -30,7 +34,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "clean": "rimraf dist",
+    "clean": "rimraf dist tsconfig.build.tsbuildinfo",
     "build": "npm run clean && tsc -p tsconfig.build.json && gulp build:icons",
     "dev": "tsc -p tsconfig.build.json --watch",
     "lint": "eslint . --ext .ts",
@@ -67,11 +71,11 @@
   "n8n": {
     "n8nNodesApiVersion": 1,
     "credentials": [
-      "dist/credentials/ExampleApi.credentials.js"
+      "dist/credentials/ArcticWolfApi.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/Boilerplate/Boilerplate.node.js",
-      "dist/nodes/Boilerplate/BoilerplateAiTools.node.js"
+      "dist/nodes/ArcticWolfSoc/ArcticWolfSoc.node.js",
+      "dist/nodes/ArcticWolfSoc/ArcticWolfSocAiTools.node.js"
     ]
   }
 }

@@ -31,16 +31,20 @@ export function formatApiError(
       nextAction: 'Verify API credentials and permissions, then retry.',
     };
   }
-  if (lower.includes('not found') || lower.includes('does not exist')) {
+  if (lower.includes('not found') || lower.includes('does not exist') || lower.includes('not_found')) {
     return {
       error: true,
       errorType: 'ENTITY_NOT_FOUND',
       message,
       operation: buildOperation(resource, operation),
-      nextAction: `Use ${resource}_getMany with a filter to find the correct record ID, then retry.`,
+      nextAction: `Use ticket_getMany or organization_getMany to find the correct ID, then retry.`,
     };
   }
-  if (lower.includes('required') || lower.includes('missing')) {
+  if (
+    lower.includes('required') ||
+    lower.includes('missing') ||
+    lower.includes('invalid_request')
+  ) {
     return {
       error: true,
       errorType: 'MISSING_REQUIRED_FIELDS',
@@ -49,13 +53,13 @@ export function formatApiError(
       nextAction: `Verify all required fields are provided, then retry.`,
     };
   }
-  if (lower.includes('picklist') || lower.includes('invalid value')) {
+  if (lower.includes('internal_server_error') || lower.includes('internal server error')) {
     return {
       error: true,
-      errorType: 'INVALID_PICKLIST_VALUE',
+      errorType: 'SERVER_ERROR',
       message,
       operation: buildOperation(resource, operation),
-      nextAction: `Verify valid field values, then retry.`,
+      nextAction: 'Retry the request. If the problem persists, contact Arctic Wolf support.',
     };
   }
 
@@ -74,6 +78,6 @@ export function formatIdError(resource: string, operation: string): StructuredTo
     errorType: 'MISSING_ENTITY_ID',
     message: `A numeric entity ID is required for ${buildOperation(resource, operation)}.`,
     operation: buildOperation(resource, operation),
-    nextAction: `Use ${resource}_getMany to locate the correct record ID first.`,
+    nextAction: `Use ticket_getMany to locate the correct ticket ID first.`,
   };
 }

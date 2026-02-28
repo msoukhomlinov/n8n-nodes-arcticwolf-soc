@@ -1,3 +1,3 @@
-export { Boilerplate } from './Boilerplate/Boilerplate.node.js';
-export { BoilerplateAiTools } from './Boilerplate/BoilerplateAiTools.node.js';
-export { ExampleApi } from '../credentials/ExampleApi.credentials.js';
+export { ArcticWolfSoc } from './ArcticWolfSoc/ArcticWolfSoc.node.js';
+export { ArcticWolfSocAiTools } from './ArcticWolfSoc/ArcticWolfSocAiTools.node.js';
+export { ArcticWolfApi } from '../credentials/ArcticWolfApi.credentials.js';
