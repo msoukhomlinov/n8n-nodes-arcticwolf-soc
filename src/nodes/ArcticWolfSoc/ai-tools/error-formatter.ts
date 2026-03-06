@@ -73,11 +73,25 @@ export function formatApiError(
 }
 
 export function formatIdError(resource: string, operation: string): StructuredToolError {
+  const nextAction =
+    resource === 'ticketComment'
+      ? `Use ticket_getMany to locate the correct ticketId, or ticketComment_getMany to locate the correct commentId.`
+      : `Use ticket_getMany to locate the correct ticket ID first.`;
   return {
     error: true,
     errorType: 'MISSING_ENTITY_ID',
     message: `A numeric entity ID is required for ${buildOperation(resource, operation)}.`,
     operation: buildOperation(resource, operation),
-    nextAction: `Use ticket_getMany to locate the correct ticket ID first.`,
+    nextAction,
+  };
+}
+
+export function formatNotFoundError(resource: string, operation: string, entityLabel: string): StructuredToolError {
+  return {
+    error: true,
+    errorType: 'ENTITY_NOT_FOUND',
+    message: `${entityLabel} not found for ${buildOperation(resource, operation)}.`,
+    operation: buildOperation(resource, operation),
+    nextAction: `Use ticketComment_getMany to list all comments on the ticket and verify the ID, then retry.`,
   };
 }

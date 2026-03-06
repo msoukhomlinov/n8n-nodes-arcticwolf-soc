@@ -1,5 +1,5 @@
 import type { INodeProperties, INodePropertyOptions } from 'n8n-workflow';
-import { TICKET_STATUSES, TICKET_PRIORITIES, TICKET_TYPES } from '../constants.js';
+import { TICKET_STATUSES, TICKET_PRIORITIES, TICKET_TYPES, DATE_RANGE_PRESETS } from '../constants.js';
 import { makeOrganizationUuidField } from './common.fields.js';
 
 function capitalize(s: string): string {
@@ -58,6 +58,56 @@ export const getManyTicketsOperationFields: INodeProperties[] = [
     displayOptions: { show: { resource: ['ticket'], operation: ['getMany'], returnAll: [false] } },
   },
   {
+    displayName: 'Created Date Range',
+    name: 'createdRange',
+    type: 'options',
+    options: DATE_RANGE_PRESETS,
+    default: '',
+    description: 'Filter tickets by when they were created',
+    displayOptions: { show: { resource: ['ticket'], operation: ['getMany'] } },
+  },
+  {
+    displayName: 'Created After',
+    name: 'createdRangeFrom',
+    type: 'dateTime',
+    default: '',
+    description: 'Return tickets created after this date/time (ISO 8601)',
+    displayOptions: { show: { resource: ['ticket'], operation: ['getMany'], createdRange: ['custom'] } },
+  },
+  {
+    displayName: 'Created Before',
+    name: 'createdRangeTo',
+    type: 'dateTime',
+    default: '',
+    description: 'Return tickets created before this date/time (ISO 8601)',
+    displayOptions: { show: { resource: ['ticket'], operation: ['getMany'], createdRange: ['custom'] } },
+  },
+  {
+    displayName: 'Updated Date Range',
+    name: 'updatedRange',
+    type: 'options',
+    options: DATE_RANGE_PRESETS,
+    default: '',
+    description: 'Filter tickets by when they were last updated',
+    displayOptions: { show: { resource: ['ticket'], operation: ['getMany'] } },
+  },
+  {
+    displayName: 'Updated After',
+    name: 'updatedRangeFrom',
+    type: 'dateTime',
+    default: '',
+    description: 'Return tickets updated after this date/time (ISO 8601)',
+    displayOptions: { show: { resource: ['ticket'], operation: ['getMany'], updatedRange: ['custom'] } },
+  },
+  {
+    displayName: 'Updated Before',
+    name: 'updatedRangeTo',
+    type: 'dateTime',
+    default: '',
+    description: 'Return tickets updated before this date/time (ISO 8601)',
+    displayOptions: { show: { resource: ['ticket'], operation: ['getMany'], updatedRange: ['custom'] } },
+  },
+  {
     displayName: 'Filters',
     name: 'filters',
     type: 'collection',
@@ -89,20 +139,6 @@ export const getManyTicketsOperationFields: INodeProperties[] = [
         description: 'Filter tickets by the last name of the assigned agent',
       },
       {
-        displayName: 'Created After',
-        name: 'createdAfter',
-        type: 'dateTime',
-        default: '',
-        description: 'Return tickets created after this date/time (ISO 8601)',
-      },
-      {
-        displayName: 'Created Before',
-        name: 'createdBefore',
-        type: 'dateTime',
-        default: '',
-        description: 'Return tickets created before this date/time (ISO 8601)',
-      },
-      {
         displayName: 'Priority',
         name: 'priority',
         type: 'options',
@@ -125,37 +161,6 @@ export const getManyTicketsOperationFields: INodeProperties[] = [
         options: typeOptions,
         default: '',
         description: 'Filter tickets by type',
-      },
-      {
-        displayName: 'Updated After',
-        name: 'updatedAfter',
-        type: 'dateTime',
-        default: '',
-        description: 'Return tickets updated after this date/time (ISO 8601)',
-      },
-      {
-        displayName: 'Updated Before',
-        name: 'updatedBefore',
-        type: 'dateTime',
-        default: '',
-        description: 'Return tickets updated before this date/time (ISO 8601)',
-      },
-    ],
-  },
-  {
-    displayName: 'Options',
-    name: 'options',
-    type: 'collection',
-    placeholder: 'Add Option',
-    default: {},
-    displayOptions: { show: { resource: ['ticket'], operation: ['getMany'] } },
-    options: [
-      {
-        displayName: 'Include Comments',
-        name: 'includeComments',
-        type: 'boolean',
-        default: false,
-        description: 'Whether to include ticket comments in the response',
       },
     ],
   },

@@ -3,7 +3,7 @@ import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { arcticWolfSocNodeProperties } from './index.js';
 import * as loadOptions from './utils/loadOptions/index.js';
 import { requestArcticWolfSoc, getTicketApiBaseUrl, getOrgsApiBaseUrl } from './lib/transport.js';
-import { buildListTicketsQs } from './lib/params.js';
+import { buildListTicketsQs, resolveDateRange } from './lib/params.js';
 
 export class ArcticWolfSoc implements INodeType {
   description: INodeTypeDescription = {
@@ -54,7 +54,16 @@ export class ArcticWolfSoc implements INodeType {
             const organizationUuid = this.getNodeParameter('organizationUuid', itemIndex) as string;
             const returnAll = this.getNodeParameter('returnAll', itemIndex, false);
             const filtersCol = this.getNodeParameter('filters', itemIndex, {} as IDataObject);
-            const optionsCol = this.getNodeParameter('options', itemIndex, {} as IDataObject);
+
+            const createdRange = this.getNodeParameter('createdRange', itemIndex, '') as string;
+            const createdRangeFrom = this.getNodeParameter('createdRangeFrom', itemIndex, '') as string;
+            const createdRangeTo = this.getNodeParameter('createdRangeTo', itemIndex, '') as string;
+            const updatedRange = this.getNodeParameter('updatedRange', itemIndex, '') as string;
+            const updatedRangeFrom = this.getNodeParameter('updatedRangeFrom', itemIndex, '') as string;
+            const updatedRangeTo = this.getNodeParameter('updatedRangeTo', itemIndex, '') as string;
+
+            const { after: createdAfter, before: createdBefore } = resolveDateRange(createdRange, createdRangeFrom, createdRangeTo);
+            const { after: updatedAfter, before: updatedBefore } = resolveDateRange(updatedRange, updatedRangeFrom, updatedRangeTo);
 
             const filterParams = {
               status: Array.isArray(filtersCol['status']) ? (filtersCol['status'] as string[]) : [],
@@ -63,11 +72,10 @@ export class ArcticWolfSoc implements INodeType {
               assigneeByEmail: (filtersCol['assigneeByEmail'] as string) ?? '',
               assigneeByFirstName: (filtersCol['assigneeByFirstName'] as string) ?? '',
               assigneeByLastName: (filtersCol['assigneeByLastName'] as string) ?? '',
-              updatedAfter: (filtersCol['updatedAfter'] as string) ?? '',
-              updatedBefore: (filtersCol['updatedBefore'] as string) ?? '',
-              createdAfter: (filtersCol['createdAfter'] as string) ?? '',
-              createdBefore: (filtersCol['createdBefore'] as string) ?? '',
-              includeComments: Boolean(optionsCol['includeComments'] ?? false),
+              updatedAfter: updatedAfter ?? '',
+              updatedBefore: updatedBefore ?? '',
+              createdAfter: createdAfter ?? '',
+              createdBefore: createdBefore ?? '',
             };
 
             if (returnAll) {
@@ -102,18 +110,13 @@ export class ArcticWolfSoc implements INodeType {
           } else if (operation === 'getTicket') {
             const organizationUuid = this.getNodeParameter('organizationUuid', itemIndex) as string;
             const ticketId = this.getNodeParameter('ticketId', itemIndex) as number;
-            const optionsCol = this.getNodeParameter('options', itemIndex, {} as IDataObject);
-            const includeComments = Boolean(optionsCol['includeComments'] ?? false);
-
-            const qs: IDataObject = {};
-            if (includeComments) qs['includeComments'] = true;
 
             const result = await requestArcticWolfSoc.call(
               this,
               'GET',
               ticketBaseUrl,
               `/api/v1/organizations/${organizationUuid}/tickets/${ticketId}`,
-              { qs },
+              { qs: {} as IDataObject },
             );
             returnData.push({ json: result, pairedItem: { item: itemIndex } });
           } else if (operation === 'closeTicket') {
@@ -132,9 +135,50 @@ export class ArcticWolfSoc implements INodeType {
               { body },
             );
             returnData.push({ json: result, pairedItem: { item: itemIndex } });
+          } else {
+            throw new NodeOperationError(
+              this.getNode(),
+              `Operation "${operation}" is not yet implemented for resource "${resource}"`,
+              { itemIndex },
+            );
+          }
+        } else if (resource === 'ticketComment') {
+          const organizationUuid = this.getNodeParameter('organizationUuid', itemIndex) as string;
+          const ticketId = this.getNodeParameter('ticketId', itemIndex) as number;
+
+          if (operation === 'getMany') {
+            const result = await requestArcticWolfSoc.call(
+              this,
+              'GET',
+              ticketBaseUrl,
+              `/api/v1/organizations/${organizationUuid}/tickets/${ticketId}`,
+              { qs: { includeComments: true } as IDataObject },
+            );
+            const comments = (result as { comments?: IDataObject[] })?.comments ?? [];
+            for (const c of comments) {
+              returnData.push({ json: c, pairedItem: { item: itemIndex } });
+            }
+          } else if (operation === 'getComment') {
+            const commentId = this.getNodeParameter('commentId', itemIndex) as number;
+
+            const result = await requestArcticWolfSoc.call(
+              this,
+              'GET',
+              ticketBaseUrl,
+              `/api/v1/organizations/${organizationUuid}/tickets/${ticketId}`,
+              { qs: { includeComments: true } as IDataObject },
+            );
+            const comments = (result as { comments?: IDataObject[] })?.comments ?? [];
+            const comment = comments.find((c) => c['id'] === commentId);
+            if (!comment) {
+              throw new NodeOperationError(
+                this.getNode(),
+                `Comment with ID ${commentId} not found on ticket ${ticketId}`,
+                { itemIndex },
+              );
+            }
+            returnData.push({ json: comment, pairedItem: { item: itemIndex } });
           } else if (operation === 'addComment') {
-            const organizationUuid = this.getNodeParameter('organizationUuid', itemIndex) as string;
-            const ticketId = this.getNodeParameter('ticketId', itemIndex) as number;
             const commentBody = this.getNodeParameter('body', itemIndex) as string;
 
             const result = await requestArcticWolfSoc.call(

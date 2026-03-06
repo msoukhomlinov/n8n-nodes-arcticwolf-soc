@@ -3,6 +3,8 @@ import { getManyTicketsOperationOption, getManyTicketsOperationFields } from './
 import { getTicketOperationOption, getTicketOperationFields } from './getTicket.operation.js';
 import { closeTicketOperationOption, closeTicketOperationFields } from './closeTicket.operation.js';
 import { addCommentOperationOption, addCommentOperationFields } from './addComment.operation.js';
+import { getManyCommentsOperationOption, getManyCommentsOperationFields } from './comment.getMany.operation.js';
+import { getCommentOperationOption, getCommentOperationFields } from './comment.getComment.operation.js';
 import {
   getManyOrganizationsOperationOption,
   getManyOrganizationsOperationFields,
@@ -17,6 +19,7 @@ export const arcticWolfSocNodeProperties: INodeProperties[] = [
     options: [
       { name: 'Organization', value: 'organization' },
       { name: 'Ticket', value: 'ticket' },
+      { name: 'Ticket Comment', value: 'ticketComment' },
     ],
     default: 'ticket',
   },
@@ -30,12 +33,29 @@ export const arcticWolfSocNodeProperties: INodeProperties[] = [
       getManyTicketsOperationOption,
       getTicketOperationOption,
       closeTicketOperationOption,
-      addCommentOperationOption,
     ],
     default: 'getMany',
     displayOptions: {
       show: {
         resource: ['ticket'],
+      },
+    },
+  },
+  // Ticket Comment operations
+  {
+    displayName: 'Operation',
+    name: 'operation',
+    type: 'options',
+    noDataExpression: true,
+    options: [
+      getManyCommentsOperationOption,
+      getCommentOperationOption,
+      addCommentOperationOption,
+    ],
+    default: 'getMany',
+    displayOptions: {
+      show: {
+        resource: ['ticketComment'],
       },
     },
   },
@@ -57,6 +77,9 @@ export const arcticWolfSocNodeProperties: INodeProperties[] = [
   ...getManyTicketsOperationFields,
   ...getTicketOperationFields,
   ...closeTicketOperationFields,
+  // Ticket Comment operation fields
+  ...getManyCommentsOperationFields,
+  ...getCommentOperationFields,
   ...addCommentOperationFields,
   // Organization operation fields
   ...getManyOrganizationsOperationFields,

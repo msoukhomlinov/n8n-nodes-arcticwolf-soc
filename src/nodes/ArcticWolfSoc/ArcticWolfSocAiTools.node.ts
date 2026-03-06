@@ -12,7 +12,6 @@ import type {
   SupplyData,
 } from 'n8n-workflow';
 import { DynamicStructuredTool } from '@langchain/core/tools';
-import { normaliseToolInputSchema } from './ai-tools/schema-normalizer.js';
 import { executeArcticWolfSocTool } from './ai-tools/tool-executor.js';
 import { WRITE_OPERATIONS } from './constants.js';
 import { RESOURCE_OPERATIONS, OP_LABELS, OPERATION_REGISTRY } from './operations.registry.js';
@@ -41,6 +40,7 @@ class ArcticWolfSocToolkit extends (LangChainToolkitBase as any) {
     this.tools = toolList;
   }
   getTools(): DynamicStructuredTool[] {
+    process.stdout.write(`[AW-AI-TOOLS] getTools() called, returning ${this.tools.length} tools\n`);
     return this.tools as DynamicStructuredTool[];
   }
 }
@@ -130,6 +130,7 @@ export class ArcticWolfSocAiTools implements INodeType {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const resource = this.getNodeParameter('resource', itemIndex) as string;
     const operations = this.getNodeParameter('operations', itemIndex) as string[];
+    process.stdout.write(`[AW-AI-TOOLS] supplyData() called — resource=${resource}, ops=${JSON.stringify(operations)}\n`);
     const allowWriteOperations = this.getNodeParameter(
       'allowWriteOperations',
       itemIndex,
@@ -153,18 +154,21 @@ export class ArcticWolfSocAiTools implements INodeType {
       const reg = OPERATION_REGISTRY[resource]?.[operation];
       if (!reg) continue;
       tools.push(
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         new DynamicStructuredTool({
           name: `${resource}_${operation}`,
           description: reg.buildDescription(referenceUtc),
-          schema: normaliseToolInputSchema(reg.getSchema()),
-          func: async (params: Record<string, unknown>) =>
-            executeArcticWolfSocTool(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+          schema: reg.getSchema() as any,
+          func: async (params: Record<string, unknown>) => {
+            return executeArcticWolfSocTool(
               supplyDataContext as unknown as IExecuteFunctions,
               resource,
               operation,
               params,
               region,
-            ),
+            );
+          },
         }),
       );
     }
@@ -176,31 +180,88 @@ export class ArcticWolfSocAiTools implements INodeType {
       );
     }
 
+    process.stdout.write(`[AW-AI-TOOLS] supplyData() returning toolkit with ${tools.length} tools\n`);
     const toolkit = new ArcticWolfSocToolkit(tools);
     return { response: toolkit };
   }
 
   /**
-   * execute() stub required for n8n 2.8+.
-   * Without this, "Test step" in the editor falls through to the declarative
-   * RoutingNode path and throws ERR_INVALID_URL (no requestDefaults configured).
-   * AI Agent tool invocations go through supplyData → DynamicStructuredTool.func only.
+   * execute() is called by n8n for both "Test step" clicks and real AI Agent tool invocations.
+   *
+   * When the AI Agent calls a tool, n8n routes it through execute() — NOT func() on
+   * DynamicStructuredTool. The input items contain tool call metadata (tool, toolCallId)
+   * plus any LLM-provided parameters merged in.
+   *
+   * When called from "Test step" (no tool field), return an informational stub.
    */
-  // eslint-disable-next-line @typescript-eslint/require-await
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-    const resource = this.getNodeParameter('resource', 0, '') as string;
-    const operations = this.getNodeParameter('operations', 0, []) as string[];
-    return [
-      [
-        {
-          json: {
-            message: 'This is an AI Tool node. Connect it to an AI Agent node to use it.',
-            configured: { resource, operations },
-          } as IDataObject,
-          pairedItem: { item: 0 },
-        },
-      ],
-    ];
+    const items = this.getInputData();
+    const firstItemTool = items[0]?.json?.['tool'] as string | undefined;
+
+    // No tool field → "Test step" click, not a real AI Agent tool call
+    if (!firstItemTool) {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+      const resource = this.getNodeParameter('resource', 0, '') as string;
+      const operations = this.getNodeParameter('operations', 0, []) as string[];
+      return [
+        [
+          {
+            json: {
+              message: 'This is an AI Tool node. Connect it to an AI Agent node to use it.',
+              configured: { resource, operations },
+            } as IDataObject,
+            pairedItem: { item: 0 },
+          },
+        ],
+      ];
+    }
+
+    // Resolve tool name (e.g. "ticket_getMany") → resource + operation via registry
+    let resource = '';
+    let operation = '';
+    outer: for (const [res, ops] of Object.entries(OPERATION_REGISTRY)) {
+      for (const op of Object.keys(ops)) {
+        if (`${res}_${op}` === firstItemTool) {
+          resource = res;
+          operation = op;
+          break outer;
+        }
+      }
+    }
+
+    if (!resource || !operation) {
+      return [
+        [
+          {
+            json: { error: `Unknown tool: ${firstItemTool}` } as IDataObject,
+            pairedItem: { item: 0 },
+          },
+        ],
+      ];
+    }
+
+    const credentials = await this.getCredentials('arcticWolfSocApi');
+    const region = credentials['region'] as string;
+
+    const returnData: INodeExecutionData[] = [];
+    for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+      const rawParams = items[itemIndex].json as Record<string, unknown>;
+      process.stdout.write(`[AW-AI-TOOLS] execute() dispatching — ${firstItemTool}\n`);
+      try {
+        const resultStr = await executeArcticWolfSocTool(this, resource, operation, rawParams, region);
+        returnData.push({
+          json: JSON.parse(resultStr) as IDataObject,
+          pairedItem: { item: itemIndex },
+        });
+      } catch (error) {
+        if (this.continueOnFail()) {
+          const msg = error instanceof Error ? error.message : String(error);
+          returnData.push({ json: { error: msg } as IDataObject, pairedItem: { item: itemIndex } });
+        } else {
+          throw error;
+        }
+      }
+    }
+    return [returnData];
   }
 }

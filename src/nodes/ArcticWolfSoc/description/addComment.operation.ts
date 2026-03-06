@@ -9,8 +9,8 @@ export const addCommentOperationOption: INodePropertyOptions = {
 };
 
 export const addCommentOperationFields: INodeProperties[] = [
-  makeOrganizationUuidField('addComment', 'The organization the ticket belongs to.'),
-  makeTicketIdField('addComment', 'The numeric ID of the ticket to add a comment to'),
+  makeOrganizationUuidField('addComment', 'The organization the ticket belongs to.', 'ticketComment'),
+  makeTicketIdField('addComment', 'The numeric ID of the ticket to add a comment to', 'ticketComment'),
   {
     displayName: 'Comment',
     name: 'body',
@@ -19,6 +19,6 @@ export const addCommentOperationFields: INodeProperties[] = [
     typeOptions: { rows: 6, maxLength: 65535 },
     default: '',
     description: 'The comment text to add to the ticket (max 65535 characters)',
-    displayOptions: { show: { resource: ['ticket'], operation: ['addComment'] } },
+    displayOptions: { show: { resource: ['ticketComment'], operation: ['addComment'] } },
   },
 ];

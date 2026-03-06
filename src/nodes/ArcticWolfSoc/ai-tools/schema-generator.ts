@@ -4,14 +4,10 @@ import { TICKET_STATUSES, TICKET_PRIORITIES, TICKET_TYPES } from '../constants.j
 // Reusable sub-schemas
 const organizationUuidSchema = z
   .string()
-  .describe('The UUID of the organization to scope the operation to');
+  .describe('UUID of the organization (e.g. "422dbd5b-68fa-48d7-ac0f-4e42bc73a40b"). Use organization_getMany first if unknown.');
 
-const ticketIdSchema = z.number().int().positive().describe('The numeric ID of the ticket');
+const ticketIdSchema = z.number().int().positive().describe('Numeric ID of the ticket (integer). Use ticket_getMany to find this if unknown.');
 
-const includeCommentsSchema = z
-  .boolean()
-  .optional()
-  .describe('Whether to include comments in the response (default: false)');
 
 // Ticket schemas
 
@@ -21,58 +17,61 @@ export function getGetManyTicketsSchema() {
     status: z
       .array(z.enum(TICKET_STATUSES))
       .optional()
-      .describe('Filter by ticket status values. Multiple values allowed.'),
+      .describe(
+        'Filter by one or more statuses (OR logic within this field). ' +
+        'OPEN/NEW/HOLD = with Arctic Wolf team (active work); PENDING = awaiting customer response; CLOSED = resolved. ' +
+        'Omit to return all statuses.',
+      ),
     priority: z
       .enum(TICKET_PRIORITIES)
       .optional()
-      .describe('Filter by ticket priority: LOW, NORMAL, HIGH, or URGENT'),
+      .describe('Filter by priority: LOW, NORMAL, HIGH, or URGENT. Omit to return all priorities.'),
     type: z
       .enum(TICKET_TYPES)
       .optional()
-      .describe('Filter by ticket type: QUESTION, INCIDENT, PROBLEM, or TASK'),
+      .describe('Filter by type: QUESTION, INCIDENT, PROBLEM, or TASK. Omit to return all types.'),
     assigneeByEmail: z
       .string()
       .email()
       .optional()
-      .describe('Filter tickets assigned to this email address'),
+      .describe('Filter by exact assignee email address.'),
     assigneeByFirstName: z
       .string()
       .optional()
-      .describe('Filter tickets by the first name of the assigned agent'),
+      .describe('Filter by assignee first name.'),
     assigneeByLastName: z
       .string()
       .optional()
-      .describe('Filter tickets by the last name of the assigned agent'),
+      .describe('Filter by assignee last name.'),
     updatedAfter: z
       .string()
       .optional()
-      .describe('Return tickets updated after this ISO 8601 date-time (e.g. 2024-01-15T00:00:00Z)'),
+      .describe('Return tickets updated after this datetime. ISO 8601 format, e.g. "2024-01-15T00:00:00Z".'),
     updatedBefore: z
       .string()
       .optional()
-      .describe('Return tickets updated before this ISO 8601 date-time'),
+      .describe('Return tickets updated before this datetime. ISO 8601 format.'),
     createdAfter: z
       .string()
       .optional()
-      .describe('Return tickets created after this ISO 8601 date-time'),
+      .describe('Return tickets created after this datetime. ISO 8601 format.'),
     createdBefore: z
       .string()
       .optional()
-      .describe('Return tickets created before this ISO 8601 date-time'),
+      .describe('Return tickets created before this datetime. ISO 8601 format.'),
     limit: z
       .number()
       .int()
       .min(1)
       .max(100)
       .optional()
-      .describe('Maximum number of tickets to return (1–100, default 20)'),
+      .describe('Max tickets per page. Min 1, max 100, default 20.'),
     offset: z
       .number()
       .int()
       .min(0)
       .optional()
-      .describe('Number of tickets to skip for pagination (default 0)'),
-    includeComments: includeCommentsSchema,
+      .describe('Tickets to skip before returning results. Use with limit for pagination. Default 0.'),
   });
 }
 
@@ -80,7 +79,6 @@ export function getGetTicketSchema() {
   return z.object({
     organizationUuid: organizationUuidSchema,
     ticketId: ticketIdSchema,
-    includeComments: includeCommentsSchema,
   });
 }
 
@@ -91,7 +89,7 @@ export function getCloseTicketSchema() {
     comment: z
       .string()
       .optional()
-      .describe('Optional comment to include when closing the ticket'),
+      .describe('Optional comment explaining why the ticket is being closed.'),
   });
 }
 
@@ -102,7 +100,24 @@ export function getAddCommentSchema() {
     body: z
       .string()
       .max(65535)
-      .describe('The comment text to add to the ticket (max 65535 characters)'),
+      .describe('Comment text to post. Plain text, required, max 65535 characters.'),
+  });
+}
+
+// Ticket Comment schemas
+
+export function getGetManyCommentsSchema() {
+  return z.object({
+    organizationUuid: organizationUuidSchema,
+    ticketId: z.number().int().positive().describe('Numeric ID of the ticket whose comments to retrieve. Use ticket_getMany to find this if unknown.'),
+  });
+}
+
+export function getGetCommentSchema() {
+  return z.object({
+    organizationUuid: organizationUuidSchema,
+    ticketId: z.number().int().positive().describe('Numeric ID of the ticket that contains the comment.'),
+    commentId: z.number().int().positive().describe('Numeric ID of the comment to retrieve. Use ticketComment_getMany first to list all comments and find this ID.'),
   });
 }
 
@@ -114,9 +129,9 @@ export function getGetManyOrganizationsSchema() {
       .string()
       .optional()
       .describe(
-        'UUID of the parent organization to scope the listing. ' +
-        'Omit to return all organizations accessible with the current credentials. ' +
-        'Use the id field from a previous organization_getMany call.',
+        'ADVANCED USE ONLY. Must be a UUID (e.g. "422dbd5b-68fa-48d7-ac0f-4e42bc73a40b") obtained from a previous call to this tool. ' +
+        'Do NOT set this field when looking up an organization by name or customerID — omit it entirely and filter the returned list yourself. ' +
+        'Setting a name, slug, or guessed value here will cause an error.',
       ),
   });
 }

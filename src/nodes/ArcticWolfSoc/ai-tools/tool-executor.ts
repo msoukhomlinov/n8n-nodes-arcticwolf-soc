@@ -1,6 +1,6 @@
 import type { IDataObject, IExecuteFunctions } from 'n8n-workflow';
 import { requestArcticWolfSoc, getTicketApiBaseUrl, getOrgsApiBaseUrl } from '../lib/transport.js';
-import { formatApiError, formatIdError } from './error-formatter.js';
+import { formatApiError, formatIdError, formatNotFoundError } from './error-formatter.js';
 import { N8N_METADATA_FIELDS } from '../constants.js';
 import { buildListTicketsQs } from '../lib/params.js';
 
@@ -39,7 +39,6 @@ export async function executeArcticWolfSocTool(
             createdBefore: params['createdBefore'] as string | undefined,
             limit: typeof params['limit'] === 'number' ? params['limit'] : undefined,
             offset: typeof params['offset'] === 'number' ? params['offset'] : undefined,
-            includeComments: params['includeComments'] as boolean | undefined,
           });
 
           const result = await requestArcticWolfSoc.call(
@@ -59,14 +58,12 @@ export async function executeArcticWolfSocTool(
           if (typeof ticketId !== 'number') {
             return JSON.stringify(formatIdError(resource, operation));
           }
-          const qs: IDataObject = {};
-          if (params['includeComments']) qs['includeComments'] = true;
           const result = await requestArcticWolfSoc.call(
             context,
             'GET',
             ticketBaseUrl,
             `/api/v1/organizations/${organizationUuid}/tickets/${ticketId}`,
-            { qs },
+            { qs: {} as IDataObject },
           );
           return JSON.stringify({ result });
         }
@@ -88,11 +85,57 @@ export async function executeArcticWolfSocTool(
           return JSON.stringify({ success: true, operation: 'closeTicket', result });
         }
 
-        case 'addComment': {
-          const ticketId = params['ticketId'];
-          if (typeof ticketId !== 'number') {
+        default:
+          return JSON.stringify({
+            error: true,
+            errorType: 'UNSUPPORTED_OPERATION',
+            message: `Unsupported ticket operation: ${operation}`,
+            operation: `${resource}.${operation}`,
+            nextAction: 'Choose a supported operation from the node configuration.',
+          });
+      }
+    } else if (resource === 'ticketComment') {
+      const organizationUuid = String(params['organizationUuid'] ?? '');
+      const ticketId = params['ticketId'];
+
+      if (typeof ticketId !== 'number') {
+        return JSON.stringify(formatIdError(resource, operation));
+      }
+
+      switch (operation) {
+        case 'getMany': {
+          const result = await requestArcticWolfSoc.call(
+            context,
+            'GET',
+            ticketBaseUrl,
+            `/api/v1/organizations/${organizationUuid}/tickets/${ticketId}`,
+            { qs: { includeComments: true } as IDataObject },
+          );
+          const comments = (result as { comments?: unknown[] })?.comments ?? [];
+          return JSON.stringify({ results: comments, count: comments.length });
+        }
+
+        case 'getComment': {
+          const commentId = params['commentId'];
+          if (typeof commentId !== 'number') {
             return JSON.stringify(formatIdError(resource, operation));
           }
+          const result = await requestArcticWolfSoc.call(
+            context,
+            'GET',
+            ticketBaseUrl,
+            `/api/v1/organizations/${organizationUuid}/tickets/${ticketId}`,
+            { qs: { includeComments: true } as IDataObject },
+          );
+          const comments = (result as { comments?: Array<Record<string, unknown>> })?.comments ?? [];
+          const comment = comments.find((c) => c['id'] === commentId);
+          if (!comment) {
+            return JSON.stringify(formatNotFoundError(resource, operation, `Comment ${commentId}`));
+          }
+          return JSON.stringify({ result: comment });
+        }
+
+        case 'addComment': {
           const body = String(params['body'] ?? '');
           const result = await requestArcticWolfSoc.call(
             context,
@@ -108,7 +151,7 @@ export async function executeArcticWolfSocTool(
           return JSON.stringify({
             error: true,
             errorType: 'UNSUPPORTED_OPERATION',
-            message: `Unsupported ticket operation: ${operation}`,
+            message: `Unsupported ticketComment operation: ${operation}`,
             operation: `${resource}.${operation}`,
             nextAction: 'Choose a supported operation from the node configuration.',
           });
@@ -145,7 +188,7 @@ export async function executeArcticWolfSocTool(
       errorType: 'UNSUPPORTED_RESOURCE',
       message: `Unsupported resource: ${resource}`,
       operation: `${resource}.${operation}`,
-      nextAction: 'Choose a supported resource (ticket, organization) from the node configuration.',
+      nextAction: 'Choose a supported resource (ticket, ticketComment, organization) from the node configuration.',
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

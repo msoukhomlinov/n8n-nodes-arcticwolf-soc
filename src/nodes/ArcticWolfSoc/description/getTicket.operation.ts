@@ -11,21 +11,4 @@ export const getTicketOperationOption: INodePropertyOptions = {
 export const getTicketOperationFields: INodeProperties[] = [
   makeOrganizationUuidField('getTicket', 'The organization the ticket belongs to.'),
   makeTicketIdField('getTicket', 'The numeric ID of the ticket to retrieve'),
-  {
-    displayName: 'Options',
-    name: 'options',
-    type: 'collection',
-    placeholder: 'Add Option',
-    default: {},
-    displayOptions: { show: { resource: ['ticket'], operation: ['getTicket'] } },
-    options: [
-      {
-        displayName: 'Include Comments',
-        name: 'includeComments',
-        type: 'boolean',
-        default: false,
-        description: 'Whether to include ticket comments in the response',
-      },
-    ],
-  },
 ];
