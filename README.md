@@ -72,4 +72,4 @@ npm test            # Jest test suite
 
 ## License
 
-Apache-2.0 © Max Soukhomlinov
+MIT © Max Soukhomlinov
