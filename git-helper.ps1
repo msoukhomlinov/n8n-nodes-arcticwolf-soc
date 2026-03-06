@@ -167,12 +167,37 @@ function Invoke-Release {
     $branch = Get-CurrentBranch
     Write-Info "Pushing to origin/$branch with tags..."
     git push origin $branch --tags
+    $publicOk = ($LASTEXITCODE -eq 0)
 
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host ""
-        Write-Success "✓ Released $Version successfully!"
-    } else {
+    if (-not $publicOk) {
         Write-Error "✗ Release failed. Check the output above for errors."
+        return
+    }
+
+    Write-Host ""
+    Write-Success "✓ Released $Version to public repo successfully!"
+
+    # --- Private repo ---
+    $gitDir = Get-PrivateGitDir
+    if ($gitDir -and (Test-Path $gitDir)) {
+        Write-Host ""
+        Write-Info "[PRIVATE] Saving and pushing private config..."
+
+        $existingPaths = $PRIVATE_PATHS | Where-Object { Test-Path $_ }
+        if ($existingPaths.Count -gt 0) {
+            Invoke-PrivateGit (@("add", "-f") + $existingPaths)
+            Invoke-PrivateGit @("commit", "-m", "release: $Version — $Message")
+            # commit may exit non-zero if nothing changed; that's fine
+        }
+
+        Invoke-PrivateGit @("push")
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "  ✓ Private config pushed."
+        } else {
+            Write-Error "  ✗ Private push failed. Run 'git-helper private push' manually."
+        }
+    } else {
+        Write-Subtle "[PRIVATE] Skipped — .private-git not found."
     }
 }
 
