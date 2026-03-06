@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "n8n community node for Arctic Wolf SOC (Ticket API & Organizations API)",
   "author": "Max Soukhomlinov",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/msoukhomlinov/n8n-nodes-arcticwolf-soc.git"
