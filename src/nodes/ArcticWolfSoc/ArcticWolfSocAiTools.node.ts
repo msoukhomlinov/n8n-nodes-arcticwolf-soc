@@ -19,16 +19,29 @@ import { RESOURCE_OPERATIONS, OP_LABELS, OPERATION_REGISTRY } from './operations
 // ---------------------------------------------------------------------------
 // Build a toolkit class the n8n AI Agent recognises via instanceof check.
 //
-// The AI Agent checks: if (toolOrToolkit instanceof Toolkit)
-// using Toolkit from @langchain/classic/agents — NOT n8n-core's StructuredToolkit.
-// Community nodes share n8n's require VM context so require('@langchain/classic/agents')
-// resolves the same cached module the agent uses, making instanceof work correctly.
+// n8n >= 2.9 exports StructuredToolkit from n8n-core and the AI Agent node
+// uses that class for its instanceof check.  Hardcoding @langchain/classic/agents
+// on those versions causes "multiple tools with the same name: 'undefined'" errors
+// because the two classes are different objects.
+//
+// Probe n8n-core first; fall back to @langchain/classic/agents for older n8n.
 // ---------------------------------------------------------------------------
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-const { Toolkit: LangChainToolkitBase } = require('@langchain/classic/agents') as {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let LangChainToolkitBase: new (...args: any[]) => { tools?: DynamicStructuredTool[]; getTools?(): DynamicStructuredTool[] };
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+  const nCore = require('n8n-core') as Record<string, unknown>;
+  const StructuredToolkit = nCore['StructuredToolkit'];
+  if (typeof StructuredToolkit !== 'function') throw new Error('not found');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  Toolkit: new (...args: any[]) => { tools?: DynamicStructuredTool[]; getTools?(): DynamicStructuredTool[] };
-};
+  LangChainToolkitBase = StructuredToolkit as any;
+} catch {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+  ({ Toolkit: LangChainToolkitBase } = require('@langchain/classic/agents') as {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    Toolkit: typeof LangChainToolkitBase;
+  });
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 class ArcticWolfSocToolkit extends (LangChainToolkitBase as any) {

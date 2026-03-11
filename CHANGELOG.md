@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-03-11
+
+### Fixed
+
+- **`ArcticWolfSocAiTools` node** — toolkit base class now probes `n8n-core` for `StructuredToolkit` at runtime (n8n ≥ 2.9) and falls back to `@langchain/classic/agents`'s `Toolkit` on older versions; fixes `"multiple tools with the same name: 'undefined'"` errors when used with AI Agent or MCP Trigger on n8n 2.9+
+
 ## [0.1.0] - 2026-03-07
 
 ### Added
