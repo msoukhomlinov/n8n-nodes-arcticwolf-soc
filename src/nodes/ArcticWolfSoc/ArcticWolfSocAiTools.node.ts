@@ -11,56 +11,16 @@ import type {
   ISupplyDataFunctions,
   SupplyData,
 } from 'n8n-workflow';
-import { DynamicStructuredTool } from '@langchain/core/tools';
 import { executeArcticWolfSocTool } from './ai-tools/tool-executor.js';
+import { buildUnifiedDescription } from './ai-tools/description-builders.js';
+import { getRuntimeSchemaBuilders } from './ai-tools/schema-generator.js';
+import { RuntimeDynamicStructuredTool, runtimeZod } from './ai-tools/runtime.js';
 import { WRITE_OPERATIONS } from './constants.js';
-import { RESOURCE_OPERATIONS, OP_LABELS, OPERATION_REGISTRY } from './operations.registry.js';
+import { RESOURCE_OPERATIONS, OP_LABELS } from './operations.registry.js';
 
-// ---------------------------------------------------------------------------
-// Build a toolkit class the n8n AI Agent recognises via instanceof check.
-//
-// n8n >= 2.9 exports StructuredToolkit from n8n-core and the AI Agent node
-// uses that class for its instanceof check.  Hardcoding @langchain/classic/agents
-// on those versions causes "multiple tools with the same name: 'undefined'" errors
-// because the two classes are different objects.
-//
-// Probe n8n-core first; fall back to @langchain/classic/agents for older n8n.
-// ---------------------------------------------------------------------------
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let LangChainToolkitBase: new (...args: any[]) => { tools?: DynamicStructuredTool[]; getTools?(): DynamicStructuredTool[] };
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-  const nCore = require('n8n-core') as Record<string, unknown>;
-  const StructuredToolkit = nCore['StructuredToolkit'];
-  if (typeof StructuredToolkit !== 'function') throw new Error('not found');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  LangChainToolkitBase = StructuredToolkit as any;
-} catch {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-  ({ Toolkit: LangChainToolkitBase } = require('@langchain/classic/agents') as {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    Toolkit: typeof LangChainToolkitBase;
-  });
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-class ArcticWolfSocToolkit extends (LangChainToolkitBase as any) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  declare tools: any[];
-  constructor(toolList: DynamicStructuredTool[]) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    super();
-    this.tools = toolList;
-  }
-  getTools(): DynamicStructuredTool[] {
-    process.stdout.write(`[AW-AI-TOOLS] getTools() called, returning ${this.tools.length} tools\n`);
-    return this.tools as DynamicStructuredTool[];
-  }
-}
-
-function formatResourceName(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
+// Initialise runtime schema builders once at module load so runtimeZod is
+// resolved before any node instance is created.
+const runtimeSchemas = getRuntimeSchemaBuilders(runtimeZod);
 
 export class ArcticWolfSocAiTools implements INodeType {
   description: INodeTypeDescription = {
@@ -69,7 +29,7 @@ export class ArcticWolfSocAiTools implements INodeType {
     icon: 'file:arcticwolfsoc.svg',
     group: ['output'],
     version: 1,
-    description: 'Expose Arctic Wolf SOC operations as individual AI tools for the AI Agent',
+    description: 'Expose Arctic Wolf SOC operations as AI tools for the AI Agent',
     defaults: { name: 'Arctic Wolf SOC AI Tools' },
     inputs: [],
     outputs: [{ type: 'ai_tool' as NodeConnectionType, displayName: 'Tools' }],
@@ -114,25 +74,29 @@ export class ArcticWolfSocAiTools implements INodeType {
     loadOptions: {
       // eslint-disable-next-line @typescript-eslint/require-await
       async getToolResources(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
-        return Object.keys(RESOURCE_OPERATIONS)
-          .map((value) => ({
-            name: formatResourceName(value),
+        return Object.entries(RESOURCE_OPERATIONS)
+          .map(([value, config]) => ({
+            name: config.label,
             value,
-            description: `${formatResourceName(value)} entity`,
+            description: `${config.label} resource`,
           }))
           .sort((a, b) => a.name.localeCompare(b.name));
       },
       // eslint-disable-next-line @typescript-eslint/require-await
-      async getToolResourceOperations(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+      async getToolResourceOperations(
+        this: ILoadOptionsFunctions,
+      ): Promise<INodePropertyOptions[]> {
         const resource = this.getCurrentNodeParameter('resource') as string;
         const allowWrite = (this.getCurrentNodeParameter('allowWriteOperations') ?? false) as boolean;
         if (!resource) return [];
-        return (RESOURCE_OPERATIONS[resource] ?? [])
+        const config = RESOURCE_OPERATIONS[resource];
+        if (!config) return [];
+        return config.ops
           .filter((op) => allowWrite || !WRITE_OPERATIONS.includes(op))
           .map((op) => ({
             name: OP_LABELS[op] ?? op,
             value: op,
-            description: `${op} operation`,
+            description: `${op} operation for ${config.label}`,
           }));
       },
     },
@@ -143,7 +107,6 @@ export class ArcticWolfSocAiTools implements INodeType {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const resource = this.getNodeParameter('resource', itemIndex) as string;
     const operations = this.getNodeParameter('operations', itemIndex) as string[];
-    process.stdout.write(`[AW-AI-TOOLS] supplyData() called — resource=${resource}, ops=${JSON.stringify(operations)}\n`);
     const allowWriteOperations = this.getNodeParameter(
       'allowWriteOperations',
       itemIndex,
@@ -154,68 +117,92 @@ export class ArcticWolfSocAiTools implements INodeType {
     if (!operations?.length)
       throw new NodeOperationError(this.getNode(), 'At least one operation must be selected');
 
-    const credentials = await this.getCredentials('arcticWolfSocApi');
-    const region = credentials['region'] as string;
+    const config = RESOURCE_OPERATIONS[resource];
+    if (!config) throw new NodeOperationError(this.getNode(), `Unknown resource: ${resource}`);
 
-    const tools: DynamicStructuredTool[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    const supplyDataContext = this;
-    const referenceUtc = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const enabledOperations = operations.filter((op) => {
+      if (WRITE_OPERATIONS.includes(op) && !allowWriteOperations) return false;
+      return config.ops.includes(op);
+    });
 
-    for (const operation of operations) {
-      if (WRITE_OPERATIONS.includes(operation) && !allowWriteOperations) continue;
-      const reg = OPERATION_REGISTRY[resource]?.[operation];
-      if (!reg) continue;
-      tools.push(
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-        new DynamicStructuredTool({
-          name: `${resource}_${operation}`,
-          description: reg.buildDescription(referenceUtc),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-          schema: reg.getSchema() as any,
-          func: async (params: Record<string, unknown>) => {
-            return executeArcticWolfSocTool(
-              supplyDataContext as unknown as IExecuteFunctions,
-              resource,
-              operation,
-              params,
-              region,
-            );
-          },
-        }),
-      );
-    }
-
-    if (tools.length === 0) {
+    if (enabledOperations.length === 0) {
       throw new NodeOperationError(
         this.getNode(),
         'No tools to expose. Select operations and enable "Allow Write Operations" if needed.',
       );
     }
 
-    process.stdout.write(`[AW-AI-TOOLS] supplyData() returning toolkit with ${tools.length} tools\n`);
-    const toolkit = new ArcticWolfSocToolkit(tools);
-    return { response: toolkit };
+    const credentials = await this.getCredentials('arcticWolfSocApi');
+    const region = credentials['region'] as string;
+    const referenceUtc = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+    const unifiedSchema = runtimeSchemas.buildUnifiedSchema(resource, enabledOperations);
+    const unifiedDescription = buildUnifiedDescription(
+      config.label,
+      resource,
+      enabledOperations,
+      referenceUtc,
+    );
+
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const supplyDataContext = this;
+
+    const unifiedTool = new RuntimeDynamicStructuredTool({
+      name: `arcticwolfsoc_${resource}`,
+      description: unifiedDescription,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+      schema: unifiedSchema as any,
+      func: async (params: Record<string, unknown>) => {
+        // MCP Trigger path: operation comes from params
+        const operationFromArgs = params['operation'];
+        const operation = typeof operationFromArgs === 'string' ? operationFromArgs : undefined;
+        if (!operation || !enabledOperations.includes(operation)) {
+          return JSON.stringify({
+            error: true,
+            errorType: 'INVALID_OPERATION',
+            message: 'Missing or unsupported operation for this tool call.',
+            providedOperation: operationFromArgs ?? null,
+            allowedOperations: enabledOperations,
+          });
+        }
+        // Pass params directly — N8N_METADATA_FIELDS in the executor strips 'operation'
+        // (and other framework fields) before any API call.
+        return executeArcticWolfSocTool(
+          supplyDataContext as unknown as IExecuteFunctions,
+          resource,
+          operation,
+          params,
+          region,
+        );
+      },
+    });
+
+    return { response: unifiedTool };
   }
 
   /**
-   * execute() is called by n8n for both "Test step" clicks and real AI Agent tool invocations.
+   * execute() is called by n8n for both "Test step" clicks and AI Agent tool invocations.
    *
-   * When the AI Agent calls a tool, n8n routes it through execute() — NOT func() on
-   * DynamicStructuredTool. The input items contain tool call metadata (tool, toolCallId)
-   * plus any LLM-provided parameters merged in.
+   * AI Agent path: item.json contains tool call metadata plus LLM-provided parameters.
+   * The 'tool' field is set to `arcticwolfsoc_${resource}`; 'operation' is the LLM-chosen op.
    *
-   * When called from "Test step" (no tool field), return an informational stub.
+   * Test step (no tool field): return an informational stub.
    */
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+    const resource = this.getNodeParameter('resource', 0, '') as string;
+    const operations = this.getNodeParameter('operations', 0, []) as string[];
+    const allowWriteOperations = this.getNodeParameter(
+      'allowWriteOperations',
+      0,
+      false,
+    ) as boolean;
+
     const items = this.getInputData();
     const firstItemTool = items[0]?.json?.['tool'] as string | undefined;
 
     // No tool field → "Test step" click, not a real AI Agent tool call
     if (!firstItemTool) {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-      const resource = this.getNodeParameter('resource', 0, '') as string;
-      const operations = this.getNodeParameter('operations', 0, []) as string[];
       return [
         [
           {
@@ -229,28 +216,24 @@ export class ArcticWolfSocAiTools implements INodeType {
       ];
     }
 
-    // Resolve tool name (e.g. "ticket_getMany") → resource + operation via registry
-    let resource = '';
-    let operation = '';
-    outer: for (const [res, ops] of Object.entries(OPERATION_REGISTRY)) {
-      for (const op of Object.keys(ops)) {
-        if (`${res}_${op}` === firstItemTool) {
-          resource = res;
-          operation = op;
-          break outer;
-        }
-      }
+    if (!resource || !operations?.length) {
+      throw new NodeOperationError(
+        this.getNode(),
+        'Resource and at least one operation must be configured.',
+      );
     }
 
-    if (!resource || !operation) {
-      return [
-        [
-          {
-            json: { error: `Unknown tool: ${firstItemTool}` } as IDataObject,
-            pairedItem: { item: 0 },
-          },
-        ],
-      ];
+    const config = RESOURCE_OPERATIONS[resource];
+    if (!config) throw new NodeOperationError(this.getNode(), `Unknown resource: ${resource}`);
+
+    const effectiveOps = operations.filter(
+      (op) => !WRITE_OPERATIONS.includes(op) || allowWriteOperations,
+    );
+    if (effectiveOps.length === 0) {
+      throw new NodeOperationError(
+        this.getNode(),
+        'No permitted operations. Enable "Allow Write Operations" if needed.',
+      );
     }
 
     const credentials = await this.getCredentials('arcticWolfSocApi');
@@ -258,10 +241,32 @@ export class ArcticWolfSocAiTools implements INodeType {
 
     const returnData: INodeExecutionData[] = [];
     for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
-      const rawParams = items[itemIndex].json as Record<string, unknown>;
-      process.stdout.write(`[AW-AI-TOOLS] execute() dispatching — ${firstItemTool}\n`);
+      const item = items[itemIndex];
+      if (!item) continue;
+
+      // Unified tool: operation comes from item.json.operation (set by AI Agent)
+      const requestedOp = item.json['operation'] as string | undefined;
+      if (!requestedOp || !effectiveOps.includes(requestedOp)) {
+        const errorPayload: IDataObject = {
+          error: true,
+          errorType: 'INVALID_OPERATION',
+          message: 'Missing or unsupported operation for this tool call.',
+          providedOperation: (requestedOp ?? null) as unknown as IDataObject,
+          allowedOperations: effectiveOps as unknown as IDataObject,
+        };
+        returnData.push({ json: errorPayload, pairedItem: { item: itemIndex } });
+        continue;
+      }
+
       try {
-        const resultStr = await executeArcticWolfSocTool(this, resource, operation, rawParams, region);
+        const rawParams = item.json as Record<string, unknown>;
+        const resultStr = await executeArcticWolfSocTool(
+          this,
+          resource,
+          requestedOp,
+          rawParams,
+          region,
+        );
         returnData.push({
           json: JSON.parse(resultStr) as IDataObject,
           pairedItem: { item: itemIndex },

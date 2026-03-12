@@ -47,4 +47,5 @@ export const N8N_METADATA_FIELDS = new Set([
   'tool',
   'toolName',
   'toolCallId',
+  'operation',  // unified tool routing field — must not reach API bodies (defense-in-depth)
 ]);

@@ -1,6 +1,11 @@
 import type { IDataObject, IExecuteFunctions } from 'n8n-workflow';
 import { requestArcticWolfSoc, getTicketApiBaseUrl, getOrgsApiBaseUrl } from '../lib/transport.js';
-import { formatApiError, formatIdError, formatNotFoundError } from './error-formatter.js';
+import {
+  formatApiError,
+  formatMissingIdError,
+  formatNotFoundError,
+  formatNoResultsFound,
+} from './error-formatter.js';
 import { N8N_METADATA_FIELDS } from '../constants.js';
 import { buildListTicketsQs } from '../lib/params.js';
 
@@ -11,7 +16,9 @@ export async function executeArcticWolfSocTool(
   rawParams: Record<string, unknown>,
   region: string,
 ): Promise<string> {
-  // Strip n8n framework metadata injected into every DynamicStructuredTool call
+  // Strip n8n framework metadata injected into every DynamicStructuredTool call.
+  // N8N_METADATA_FIELDS includes 'operation' as defense-in-depth so it never
+  // reaches API request bodies regardless of which execution path is used.
   const params: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(rawParams)) {
     if (!N8N_METADATA_FIELDS.has(key)) params[key] = value;
@@ -50,13 +57,30 @@ export async function executeArcticWolfSocTool(
           );
           const paginated = result as { results?: unknown[]; meta?: unknown };
           const tickets = Array.isArray(paginated?.results) ? paginated.results : [];
+
+          // Filtered empty → signal to LLM rather than returning misleading empty success.
+          // Exclude pagination params (limit/offset) — those are always present and are not
+          // semantic filters that would cause zero results.
+          const PAGINATION_KEYS = new Set(['limit', 'offset']);
+          const hasFilters = Object.entries(qs).some(
+            ([k, v]) => !PAGINATION_KEYS.has(k) && v !== undefined && v !== null && v !== '',
+          );
+          if (tickets.length === 0 && hasFilters) {
+            const filtersUsed = Object.fromEntries(
+              Object.entries(qs).filter(
+                ([k, v]) => !PAGINATION_KEYS.has(k) && v !== undefined && v !== null && v !== '',
+              ),
+            );
+            return JSON.stringify(formatNoResultsFound(resource, operation, filtersUsed));
+          }
+
           return JSON.stringify({ results: tickets, count: tickets.length, meta: paginated?.meta });
         }
 
         case 'getTicket': {
           const ticketId = params['ticketId'];
           if (typeof ticketId !== 'number') {
-            return JSON.stringify(formatIdError(resource, operation));
+            return JSON.stringify(formatMissingIdError(resource, operation));
           }
           const result = await requestArcticWolfSoc.call(
             context,
@@ -65,13 +89,26 @@ export async function executeArcticWolfSocTool(
             `/api/v1/organizations/${organizationUuid}/tickets/${ticketId}`,
             { qs: {} as IDataObject },
           );
+          // Null guard — prevents LLM from hallucinating when API returns 200 with empty body
+          const isMissing =
+            result === null ||
+            result === undefined ||
+            (Array.isArray(result) && result.length === 0) ||
+            (typeof result === 'object' &&
+              !Array.isArray(result) &&
+              Object.keys(result as object).length === 0);
+          if (isMissing) {
+            return JSON.stringify(
+              formatNotFoundError(resource, operation, `Ticket ${ticketId}`),
+            );
+          }
           return JSON.stringify({ result });
         }
 
         case 'closeTicket': {
           const ticketId = params['ticketId'];
           if (typeof ticketId !== 'number') {
-            return JSON.stringify(formatIdError(resource, operation));
+            return JSON.stringify(formatMissingIdError(resource, operation));
           }
           const body: IDataObject = {};
           if (params['comment']) body['comment'] = params['comment'] as string;
@@ -99,7 +136,7 @@ export async function executeArcticWolfSocTool(
       const ticketId = params['ticketId'];
 
       if (typeof ticketId !== 'number') {
-        return JSON.stringify(formatIdError(resource, operation));
+        return JSON.stringify(formatMissingIdError(resource, operation));
       }
 
       switch (operation) {
@@ -118,7 +155,7 @@ export async function executeArcticWolfSocTool(
         case 'getComment': {
           const commentId = params['commentId'];
           if (typeof commentId !== 'number') {
-            return JSON.stringify(formatIdError(resource, operation));
+            return JSON.stringify(formatMissingIdError(resource, operation));
           }
           const result = await requestArcticWolfSoc.call(
             context,
@@ -130,13 +167,18 @@ export async function executeArcticWolfSocTool(
           const comments = (result as { comments?: Array<Record<string, unknown>> })?.comments ?? [];
           const comment = comments.find((c) => c['id'] === commentId);
           if (!comment) {
-            return JSON.stringify(formatNotFoundError(resource, operation, `Comment ${commentId}`));
+            return JSON.stringify(
+              formatNotFoundError(resource, operation, `Comment ${commentId}`),
+            );
           }
           return JSON.stringify({ result: comment });
         }
 
         case 'addComment': {
-          const body = String(params['body'] ?? '');
+          const body = params['body'];
+          if (typeof body !== 'string' || !body.trim()) {
+            return JSON.stringify(formatMissingIdError(resource, operation));
+          }
           const result = await requestArcticWolfSoc.call(
             context,
             'POST',
@@ -188,7 +230,8 @@ export async function executeArcticWolfSocTool(
       errorType: 'UNSUPPORTED_RESOURCE',
       message: `Unsupported resource: ${resource}`,
       operation: `${resource}.${operation}`,
-      nextAction: 'Choose a supported resource (ticket, ticketComment, organization) from the node configuration.',
+      nextAction:
+        'Choose a supported resource (ticket, ticketComment, organization) from the node configuration.',
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

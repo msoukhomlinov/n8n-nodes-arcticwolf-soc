@@ -1,82 +1,71 @@
-/**
- * Builder functions satisfy the `(referenceUtc: string) => string` contract required by
- * `OperationRegistration`. Builders that include time-sensitive guidance call
- * `dateTimeReferenceSnippet(referenceUtc)`. Builders for time-invariant operations accept
- * the parameter but ignore it — TypeScript allows this via parameter arity compatibility.
- */
-
 /** Inject current UTC so the LLM doesn't assume training cutoff = now */
 export function dateTimeReferenceSnippet(referenceUtc: string): string {
   return `Reference: current UTC when these tools were loaded is ${referenceUtc}. Use this for "today" or "recent" queries — do not assume a different date. `;
 }
 
-export function buildGetManyTicketsDescription(referenceUtc: string): string {
-  return (
-    dateTimeReferenceSnippet(referenceUtc) +
-    'Fetch live ticket data from the Arctic Wolf API. Do not guess or fabricate ticket IDs, titles, or statuses — call this tool to get real data. ' +
-    'Returns: { results: Ticket[], meta: { total, offset, limit } }. Each Ticket has: id, title, description, status, priority, type, assignee.{email, firstName, lastName}, createdAt, updatedAt, commentCount. ' +
-    'Status semantics: OPEN/NEW/HOLD = with Arctic Wolf team (active work); PENDING = awaiting customer response; CLOSED = resolved. ' +
-    'All filters are optional and combined with AND logic. ' +
-    'Pagination: default limit=20, max=100. If meta.total > (offset + limit), call again with offset incremented by limit to get the next page. ' +
-    'Use organization_getMany first if organizationUuid is unknown. ' +
-    'To read comments on a ticket, use ticketComment_getMany.'
-  );
-}
+// Unified description builder — composes per-operation guidance into one string
+// for the single unified tool per resource
 
-export function buildGetTicketDescription(): string {
-  return (
-    'Fetch a single live ticket from the Arctic Wolf API by its numeric ID. Do not fabricate ticket data — call this tool. ' +
-    'Returns a Ticket object: id, title, description, status, priority, type, assignee.{email, firstName, lastName}, createdAt, updatedAt, commentCount. ' +
-    'Use ticket_getMany to find the ticketId if unknown. ' +
-    'Use organization_getMany first if organizationUuid is unknown. ' +
-    'To retrieve comments on this ticket, use ticketComment_getMany.'
-  );
-}
+export function buildUnifiedDescription(
+  resourceLabel: string,
+  resource: string,
+  operations: string[],
+  referenceUtc: string,
+): string {
+  const enabledOps = Array.from(new Set(operations));
 
-export function buildCloseTicketDescription(): string {
-  return (
-    'Close a ticket via the Arctic Wolf API. Any ticket can be closed regardless of its current status. ' +
-    'Returns the updated Ticket object with status=CLOSED. ' +
-    'Optionally provide a comment to explain the closure reason. ' +
-    'Use ticket_getMany or ticket_getTicket to confirm the ticketId before closing — do not guess it.'
-  );
-}
+  const operationLines = enabledOps.map((operation) => {
+    switch (`${resource}.${operation}`) {
+      case 'ticket.getMany':
+        return (
+          `- getMany: Fetch live tickets. ` +
+          `${dateTimeReferenceSnippet(referenceUtc)}` +
+          `Returns { results: Ticket[], meta: { total, offset, limit } }. ` +
+          `Filters: status (array), priority, type, assigneeByEmail/FirstName/LastName, updatedAfter/Before, createdAfter/Before, limit (default 20, max 100), offset. ` +
+          `Call arcticwolfsoc_organization with operation 'getMany' first if organizationUuid is unknown.`
+        );
+      case 'ticket.getTicket':
+        return (
+          `- getTicket: Fetch a single ticket by numeric ticketId. ` +
+          `ONLY use when you already have the ticketId from a prior getMany. Returns full Ticket object.`
+        );
+      case 'ticket.closeTicket':
+        return (
+          `- closeTicket: Close a ticket. PREREQUISITE: numeric ticketId (from getMany). ` +
+          `Optional comment field. Returns updated Ticket with status=CLOSED.`
+        );
+      case 'ticketComment.getMany':
+        return (
+          `- getMany: List all comments on a ticket. ` +
+          `Returns Comment[]: id, body, author.{firstName, lastName, email}, createdAt. ` +
+          `Call arcticwolfsoc_ticket with operation 'getMany' first if ticketId is unknown.`
+        );
+      case 'ticketComment.getComment':
+        return (
+          `- getComment: Fetch one comment by numeric commentId. ` +
+          `ONLY use when you already have the commentId from a prior getMany. Returns Comment object.`
+        );
+      case 'ticketComment.addComment':
+        return (
+          `- addComment: Post a new comment to a ticket. ` +
+          `Required: body (plain text, max 65535 chars). PREREQUISITE: numeric ticketId.`
+        );
+      case 'organization.getMany':
+        return (
+          `- getMany: List all Arctic Wolf organizations. ` +
+          `Returns array of { id (UUID), customerID, name, pod }. ` +
+          `Always call this first when organizationUuid is unknown — never guess the UUID. ` +
+          `Call with NO arguments to get the full list, then match by name or customerID.`
+        );
+      default:
+        return `- ${operation}: Operation available for this resource.`;
+    }
+  });
 
-export function buildAddCommentDescription(): string {
-  return (
-    'Post a new comment to an Arctic Wolf ticket via the API. The comment body is required (plain text, max 65535 characters). ' +
-    'Returns the new Comment object: id, body, author.{email, firstName, lastName}, createdAt. ' +
-    'Use ticket_getMany or ticket_getTicket to find the ticketId if unknown — do not guess it. ' +
-    'Use organization_getMany first if organizationUuid is unknown.'
-  );
-}
-
-export function buildGetManyCommentsDescription(): string {
-  return (
-    'Fetch all live comments for a single ticket from the Arctic Wolf API. Do not fabricate comment IDs or content — call this tool. ' +
-    'Returns an array of Comment objects, each with: id, body, author.{firstName, lastName, email}, createdAt. ' +
-    'To retrieve one specific comment by ID, use ticketComment_getComment. ' +
-    'Use ticket_getMany to find the ticketId if unknown.'
-  );
-}
-
-export function buildGetCommentDescription(): string {
-  return (
-    'Fetch a single live comment by its numeric ID from the Arctic Wolf API. Do not fabricate comment data — call this tool. ' +
-    'Returns: id, body, author.{firstName, lastName, email}, createdAt. ' +
-    'Use ticketComment_getMany first to list all comments and find the correct commentId.'
-  );
-}
-
-export function buildGetManyOrganizationsDescription(): string {
-  return (
-    'Fetch the live list of Arctic Wolf organizations from the API. ' +
-    'Returns a JSON array; each element has: id (UUID string), customerID (short slug), name (display name), pod (region code). ' +
-    'You cannot know these values without calling this tool — do not guess or fabricate them. ' +
-    'HOW TO FIND AN ORGANIZATION BY NAME OR CUSTOMERID: ' +
-    'Step 1 — call this tool with NO arguments. ' +
-    'Step 2 — inspect the returned array and find the entry whose name or customerID matches what you are looking for. ' +
-    'Step 3 — take that entry\'s id (UUID) and use it as organizationUuid in subsequent ticket operations. ' +
-    'The root parameter is for advanced scoping only: it must be a UUID obtained from a prior call to this tool; never set it to a name, slug, or guessed value.'
-  );
+  return [
+    `Manage Arctic Wolf ${resourceLabel} records via the API.`,
+    `Pass one of the following values in the required "operation" field:`,
+    ...operationLines,
+    `Prefer running getMany first to discover IDs before using get, close, or write operations.`,
+  ].join('\n');
 }
