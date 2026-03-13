@@ -78,7 +78,11 @@ export async function executeArcticWolfSocTool(
           }
 
           return JSON.stringify(
-            wrapSuccess(resource, operation, { items: tickets, count: tickets.length, meta: paginated?.meta }),
+            wrapSuccess(resource, operation, {
+              items: tickets,
+              count: tickets.length,
+              meta: paginated?.meta,
+            }),
           );
         }
 
@@ -103,9 +107,7 @@ export async function executeArcticWolfSocTool(
               !Array.isArray(result) &&
               Object.keys(result as object).length === 0);
           if (isMissing) {
-            return JSON.stringify(
-              formatNotFoundError(resource, operation, `Ticket ${ticketId}`),
-            );
+            return JSON.stringify(formatNotFoundError(resource, operation, `Ticket ${ticketId}`));
           }
           return JSON.stringify(wrapSuccess(resource, operation, result));
         }
@@ -156,7 +158,9 @@ export async function executeArcticWolfSocTool(
             { qs: { includeComments: true } as IDataObject },
           );
           const comments = (result as { comments?: unknown[] })?.comments ?? [];
-          return JSON.stringify(wrapSuccess(resource, operation, { items: comments, count: comments.length }));
+          return JSON.stringify(
+            wrapSuccess(resource, operation, { items: comments, count: comments.length }),
+          );
         }
 
         case 'getComment': {
@@ -171,12 +175,11 @@ export async function executeArcticWolfSocTool(
             `/api/v1/organizations/${organizationUuid}/tickets/${ticketId}`,
             { qs: { includeComments: true } as IDataObject },
           );
-          const comments = (result as { comments?: Array<Record<string, unknown>> })?.comments ?? [];
+          const comments =
+            (result as { comments?: Array<Record<string, unknown>> })?.comments ?? [];
           const comment = comments.find((c) => c['id'] === commentId);
           if (!comment) {
-            return JSON.stringify(
-              formatNotFoundError(resource, operation, `Comment ${commentId}`),
-            );
+            return JSON.stringify(formatNotFoundError(resource, operation, `Comment ${commentId}`));
           }
           return JSON.stringify(wrapSuccess(resource, operation, comment));
         }
@@ -184,7 +187,15 @@ export async function executeArcticWolfSocTool(
         case 'addComment': {
           const body = params['body'];
           if (typeof body !== 'string' || !body.trim()) {
-            return JSON.stringify(formatMissingIdError(resource, operation));
+            return JSON.stringify(
+              wrapError(
+                resource,
+                operation,
+                ERROR_TYPES.MISSING_REQUIRED_FIELD,
+                "A non-empty 'body' string is required for addComment.",
+                'Provide the comment text in the body parameter and retry.',
+              ),
+            );
           }
           const result = await requestArcticWolfSoc.call(
             context,

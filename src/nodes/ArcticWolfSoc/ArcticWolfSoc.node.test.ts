@@ -31,9 +31,7 @@ describe('ArcticWolfSoc node', () => {
     });
 
     it('requires arcticWolfSocApi credential', () => {
-      expect(node.description.credentials).toEqual([
-        { name: 'arcticWolfSocApi', required: true },
-      ]);
+      expect(node.description.credentials).toEqual([{ name: 'arcticWolfSocApi', required: true }]);
     });
 
     it('has usableAsTool enabled', () => {
@@ -81,7 +79,8 @@ describe('ArcticWolfSoc node', () => {
       const page1 = Array.from({ length: 100 }, (_, i) => ({ id: i + 1 }));
       const page2 = [{ id: 101 }, { id: 102 }];
 
-      const mockRequestWithAuthentication = jest.fn()
+      const mockRequestWithAuthentication = jest
+        .fn()
         .mockResolvedValueOnce({ results: page1 })
         .mockResolvedValueOnce({ results: page2 });
 
@@ -98,7 +97,12 @@ describe('ArcticWolfSoc node', () => {
         },
         continueOnFail: () => false,
         helpers: { requestWithAuthentication: mockRequestWithAuthentication },
-        getNode: () => ({ name: 'test', type: 'test', typeVersion: 1, position: [0, 0] as [number, number] }),
+        getNode: () => ({
+          name: 'test',
+          type: 'test',
+          typeVersion: 1,
+          position: [0, 0] as [number, number],
+        }),
       } as unknown as IExecuteFunctions;
 
       const result = await node.execute.call(mockContext);
@@ -125,7 +129,12 @@ describe('ArcticWolfSoc node', () => {
         },
         continueOnFail: () => false,
         helpers: { requestWithAuthentication: mockRequestWithAuthentication },
-        getNode: () => ({ name: 'test', type: 'test', typeVersion: 1, position: [0, 0] as [number, number] }),
+        getNode: () => ({
+          name: 'test',
+          type: 'test',
+          typeVersion: 1,
+          position: [0, 0] as [number, number],
+        }),
       } as unknown as IExecuteFunctions;
 
       const result = await node.execute.call(mockContext);
@@ -144,7 +153,10 @@ describe('ArcticWolfSoc node', () => {
     };
 
     it('getMany returns each comment as a separate item', async () => {
-      const comments = [{ id: 1, body: 'first' }, { id: 2, body: 'second' }];
+      const comments = [
+        { id: 1, body: 'first' },
+        { id: 2, body: 'second' },
+      ];
       const mockRequest = jest.fn().mockResolvedValue({ comments });
 
       const mockContext = {
@@ -156,7 +168,12 @@ describe('ArcticWolfSoc node', () => {
         },
         continueOnFail: () => false,
         helpers: { requestWithAuthentication: mockRequest },
-        getNode: () => ({ name: 'test', type: 'test', typeVersion: 1, position: [0, 0] as [number, number] }),
+        getNode: () => ({
+          name: 'test',
+          type: 'test',
+          typeVersion: 1,
+          position: [0, 0] as [number, number],
+        }),
       } as unknown as IExecuteFunctions;
 
       const result = await node.execute.call(mockContext);
@@ -178,7 +195,12 @@ describe('ArcticWolfSoc node', () => {
         },
         continueOnFail: () => false,
         helpers: { requestWithAuthentication: mockRequest },
-        getNode: () => ({ name: 'test', type: 'test', typeVersion: 1, position: [0, 0] as [number, number] }),
+        getNode: () => ({
+          name: 'test',
+          type: 'test',
+          typeVersion: 1,
+          position: [0, 0] as [number, number],
+        }),
       } as unknown as IExecuteFunctions;
 
       const result = await node.execute.call(mockContext);
@@ -187,7 +209,10 @@ describe('ArcticWolfSoc node', () => {
     });
 
     it('getComment returns the matching comment', async () => {
-      const comments = [{ id: 1, body: 'first' }, { id: 2, body: 'second' }];
+      const comments = [
+        { id: 1, body: 'first' },
+        { id: 2, body: 'second' },
+      ];
       const mockRequest = jest.fn().mockResolvedValue({ comments });
 
       const mockContext = {
@@ -200,7 +225,12 @@ describe('ArcticWolfSoc node', () => {
         },
         continueOnFail: () => false,
         helpers: { requestWithAuthentication: mockRequest },
-        getNode: () => ({ name: 'test', type: 'test', typeVersion: 1, position: [0, 0] as [number, number] }),
+        getNode: () => ({
+          name: 'test',
+          type: 'test',
+          typeVersion: 1,
+          position: [0, 0] as [number, number],
+        }),
       } as unknown as IExecuteFunctions;
 
       const result = await node.execute.call(mockContext);
@@ -222,10 +252,17 @@ describe('ArcticWolfSoc node', () => {
         },
         continueOnFail: () => false,
         helpers: { requestWithAuthentication: mockRequest },
-        getNode: () => ({ name: 'test', type: 'test', typeVersion: 1, position: [0, 0] as [number, number] }),
+        getNode: () => ({
+          name: 'test',
+          type: 'test',
+          typeVersion: 1,
+          position: [0, 0] as [number, number],
+        }),
       } as unknown as IExecuteFunctions;
 
-      await expect(node.execute.call(mockContext)).rejects.toThrow('Comment with ID 999 not found on ticket 42');
+      await expect(node.execute.call(mockContext)).rejects.toThrow(
+        'Comment with ID 999 not found on ticket 42',
+      );
     });
 
     it('getComment with continueOnFail pushes error item when commentId not found', async () => {
@@ -241,7 +278,12 @@ describe('ArcticWolfSoc node', () => {
         },
         continueOnFail: () => true,
         helpers: { requestWithAuthentication: mockRequest },
-        getNode: () => ({ name: 'test', type: 'test', typeVersion: 1, position: [0, 0] as [number, number] }),
+        getNode: () => ({
+          name: 'test',
+          type: 'test',
+          typeVersion: 1,
+          position: [0, 0] as [number, number],
+        }),
       } as unknown as IExecuteFunctions;
 
       const result = await node.execute.call(mockContext);
@@ -265,7 +307,12 @@ describe('ArcticWolfSoc node', () => {
         },
         continueOnFail: () => false,
         helpers: { requestWithAuthentication: mockRequest },
-        getNode: () => ({ name: 'test', type: 'test', typeVersion: 1, position: [0, 0] as [number, number] }),
+        getNode: () => ({
+          name: 'test',
+          type: 'test',
+          typeVersion: 1,
+          position: [0, 0] as [number, number],
+        }),
       } as unknown as IExecuteFunctions;
 
       const result = await node.execute.call(mockContext);

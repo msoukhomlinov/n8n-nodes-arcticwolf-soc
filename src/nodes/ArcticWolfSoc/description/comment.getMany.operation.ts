@@ -10,5 +10,9 @@ export const getManyCommentsOperationOption: INodePropertyOptions = {
 
 export const getManyCommentsOperationFields: INodeProperties[] = [
   makeOrganizationUuidField('getMany', 'The organization the ticket belongs to.', 'ticketComment'),
-  makeTicketIdField('getMany', 'The numeric ID of the ticket to retrieve comments for', 'ticketComment'),
+  makeTicketIdField(
+    'getMany',
+    'The numeric ID of the ticket to retrieve comments for',
+    'ticketComment',
+  ),
 ];

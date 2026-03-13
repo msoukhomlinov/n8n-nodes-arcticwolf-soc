@@ -1,4 +1,10 @@
-import type { IDataObject, IExecuteFunctions, INodeExecutionData, INodeType, INodeTypeDescription } from 'n8n-workflow';
+import type {
+  IDataObject,
+  IExecuteFunctions,
+  INodeExecutionData,
+  INodeType,
+  INodeTypeDescription,
+} from 'n8n-workflow';
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { arcticWolfSocNodeProperties } from './index.js';
 import * as loadOptions from './utils/loadOptions/index.js';
@@ -56,14 +62,30 @@ export class ArcticWolfSoc implements INodeType {
             const filtersCol = this.getNodeParameter('filters', itemIndex, {} as IDataObject);
 
             const createdRange = this.getNodeParameter('createdRange', itemIndex, '') as string;
-            const createdRangeFrom = this.getNodeParameter('createdRangeFrom', itemIndex, '') as string;
+            const createdRangeFrom = this.getNodeParameter(
+              'createdRangeFrom',
+              itemIndex,
+              '',
+            ) as string;
             const createdRangeTo = this.getNodeParameter('createdRangeTo', itemIndex, '') as string;
             const updatedRange = this.getNodeParameter('updatedRange', itemIndex, '') as string;
-            const updatedRangeFrom = this.getNodeParameter('updatedRangeFrom', itemIndex, '') as string;
+            const updatedRangeFrom = this.getNodeParameter(
+              'updatedRangeFrom',
+              itemIndex,
+              '',
+            ) as string;
             const updatedRangeTo = this.getNodeParameter('updatedRangeTo', itemIndex, '') as string;
 
-            const { after: createdAfter, before: createdBefore } = resolveDateRange(createdRange, createdRangeFrom, createdRangeTo);
-            const { after: updatedAfter, before: updatedBefore } = resolveDateRange(updatedRange, updatedRangeFrom, updatedRangeTo);
+            const { after: createdAfter, before: createdBefore } = resolveDateRange(
+              createdRange,
+              createdRangeFrom,
+              createdRangeTo,
+            );
+            const { after: updatedAfter, before: updatedBefore } = resolveDateRange(
+              updatedRange,
+              updatedRangeFrom,
+              updatedRangeTo,
+            );
 
             const filterParams = {
               status: Array.isArray(filtersCol['status']) ? (filtersCol['status'] as string[]) : [],
@@ -223,11 +245,9 @@ export class ArcticWolfSoc implements INodeType {
             );
           }
         } else {
-          throw new NodeOperationError(
-            this.getNode(),
-            `Resource "${resource}" is not supported`,
-            { itemIndex },
-          );
+          throw new NodeOperationError(this.getNode(), `Resource "${resource}" is not supported`, {
+            itemIndex,
+          });
         }
       } catch (error) {
         if (this.continueOnFail()) {

@@ -40,7 +40,14 @@ describe('wrapSuccess / wrapError', () => {
   });
 
   it('wrapError returns a valid ErrorEnvelope', () => {
-    const env = wrapError('ticket', 'getTicket', ERROR_TYPES.ENTITY_NOT_FOUND, 'Not found', 'Retry', { id: 42 });
+    const env = wrapError(
+      'ticket',
+      'getTicket',
+      ERROR_TYPES.ENTITY_NOT_FOUND,
+      'Not found',
+      'Retry',
+      { id: 42 },
+    );
     expect(env.schemaVersion).toBe('1');
     expect(env.success).toBe(false);
     expect(env.operation).toBe('ticket.getTicket');
@@ -590,7 +597,7 @@ describe('executeArcticWolfSocTool', () => {
       expect(result.operation).toBe('ticketComment.addComment');
     });
 
-    it('returns MISSING_ENTITY_ID when body is absent', async () => {
+    it('returns MISSING_REQUIRED_FIELD when body is absent', async () => {
       const result = JSON.parse(
         await executeArcticWolfSocTool(
           mockContext,
@@ -601,10 +608,10 @@ describe('executeArcticWolfSocTool', () => {
         ),
       ) as ErrorEnvelope;
       expect(result.success).toBe(false);
-      expect(result.error.errorType).toBe('MISSING_ENTITY_ID');
+      expect(result.error.errorType).toBe('MISSING_REQUIRED_FIELD');
     });
 
-    it('returns MISSING_ENTITY_ID when body is empty string', async () => {
+    it('returns MISSING_REQUIRED_FIELD when body is empty string', async () => {
       const result = JSON.parse(
         await executeArcticWolfSocTool(
           mockContext,
@@ -615,7 +622,7 @@ describe('executeArcticWolfSocTool', () => {
         ),
       ) as ErrorEnvelope;
       expect(result.success).toBe(false);
-      expect(result.error.errorType).toBe('MISSING_ENTITY_ID');
+      expect(result.error.errorType).toBe('MISSING_REQUIRED_FIELD');
     });
   });
 
@@ -624,13 +631,7 @@ describe('executeArcticWolfSocTool', () => {
       const orgs = [{ id: 'uuid-1', name: 'Acme Corp' }];
       transport.requestArcticWolfSoc.mockResolvedValue(orgs);
       const result = JSON.parse(
-        await executeArcticWolfSocTool(
-          mockContext,
-          'organization',
-          'getMany',
-          {},
-          'us001',
-        ),
+        await executeArcticWolfSocTool(mockContext, 'organization', 'getMany', {}, 'us001'),
       ) as SuccessEnvelope;
       expect(result.success).toBe(true);
       expect((result.result as { items: unknown[] }).items).toEqual(orgs);
@@ -641,13 +642,7 @@ describe('executeArcticWolfSocTool', () => {
       const org = { id: 'uuid-1', name: 'Acme Corp' };
       transport.requestArcticWolfSoc.mockResolvedValue(org);
       const result = JSON.parse(
-        await executeArcticWolfSocTool(
-          mockContext,
-          'organization',
-          'getMany',
-          {},
-          'us001',
-        ),
+        await executeArcticWolfSocTool(mockContext, 'organization', 'getMany', {}, 'us001'),
       ) as SuccessEnvelope;
       expect(result.success).toBe(true);
       expect((result.result as { items: unknown[] }).items).toEqual([org]);
@@ -662,7 +657,12 @@ describe('executeArcticWolfSocTool', () => {
         mockContext,
         'ticket',
         'getMany',
-        { organizationUuid: 'org-uuid', operation: 'getMany', sessionId: 'abc', tool: 'arcticwolfsoc_ticket' },
+        {
+          organizationUuid: 'org-uuid',
+          operation: 'getMany',
+          sessionId: 'abc',
+          tool: 'arcticwolfsoc_ticket',
+        },
         'us001',
       );
       // The qs object passed to requestArcticWolfSoc should not contain 'operation', 'sessionId', or 'tool'

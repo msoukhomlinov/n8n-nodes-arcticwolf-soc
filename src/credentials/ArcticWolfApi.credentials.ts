@@ -4,7 +4,8 @@ import { REGIONS } from '../nodes/ArcticWolfSoc/constants.js';
 export class ArcticWolfApi implements ICredentialType {
   name = 'arcticWolfSocApi';
   displayName = 'Arctic Wolf SOC API';
-  documentationUrl = 'https://docs.arcticwolf.com/bundle/unlisted_documentation/page/ticket_api_quick_start_guide.html';
+  documentationUrl =
+    'https://docs.arcticwolf.com/bundle/unlisted_documentation/page/ticket_api_quick_start_guide.html';
   properties: INodeProperties[] = [
     {
       displayName: 'Bearer Token',

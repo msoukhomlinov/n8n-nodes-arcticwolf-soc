@@ -1,5 +1,10 @@
 import type { INodeProperties, INodePropertyOptions } from 'n8n-workflow';
-import { TICKET_STATUSES, TICKET_PRIORITIES, TICKET_TYPES, DATE_RANGE_PRESETS } from '../constants.js';
+import {
+  TICKET_STATUSES,
+  TICKET_PRIORITIES,
+  TICKET_TYPES,
+  DATE_RANGE_PRESETS,
+} from '../constants.js';
 import { makeOrganizationUuidField } from './common.fields.js';
 
 function capitalize(s: string): string {
@@ -72,7 +77,9 @@ export const getManyTicketsOperationFields: INodeProperties[] = [
     type: 'dateTime',
     default: '',
     description: 'Return tickets created after this date/time (ISO 8601)',
-    displayOptions: { show: { resource: ['ticket'], operation: ['getMany'], createdRange: ['custom'] } },
+    displayOptions: {
+      show: { resource: ['ticket'], operation: ['getMany'], createdRange: ['custom'] },
+    },
   },
   {
     displayName: 'Created Before',
@@ -80,7 +87,9 @@ export const getManyTicketsOperationFields: INodeProperties[] = [
     type: 'dateTime',
     default: '',
     description: 'Return tickets created before this date/time (ISO 8601)',
-    displayOptions: { show: { resource: ['ticket'], operation: ['getMany'], createdRange: ['custom'] } },
+    displayOptions: {
+      show: { resource: ['ticket'], operation: ['getMany'], createdRange: ['custom'] },
+    },
   },
   {
     displayName: 'Updated Date Range',
@@ -97,7 +106,9 @@ export const getManyTicketsOperationFields: INodeProperties[] = [
     type: 'dateTime',
     default: '',
     description: 'Return tickets updated after this date/time (ISO 8601)',
-    displayOptions: { show: { resource: ['ticket'], operation: ['getMany'], updatedRange: ['custom'] } },
+    displayOptions: {
+      show: { resource: ['ticket'], operation: ['getMany'], updatedRange: ['custom'] },
+    },
   },
   {
     displayName: 'Updated Before',
@@ -105,7 +116,9 @@ export const getManyTicketsOperationFields: INodeProperties[] = [
     type: 'dateTime',
     default: '',
     description: 'Return tickets updated before this date/time (ISO 8601)',
-    displayOptions: { show: { resource: ['ticket'], operation: ['getMany'], updatedRange: ['custom'] } },
+    displayOptions: {
+      show: { resource: ['ticket'], operation: ['getMany'], updatedRange: ['custom'] },
+    },
   },
   {
     displayName: 'Filters',

@@ -110,7 +110,11 @@ export function formatApiError(
       'Verify parameter values are valid, then retry.',
     );
   }
-  if (lower.includes('required') || lower.includes('missing') || lower.includes('invalid_request')) {
+  if (
+    lower.includes('required') ||
+    lower.includes('missing') ||
+    lower.includes('invalid_request')
+  ) {
     return wrapError(
       resource,
       operation,

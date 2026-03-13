@@ -43,9 +43,9 @@ export const N8N_METADATA_FIELDS = new Set([
   'sessionId',
   'action',
   'chatInput',
-  'root',       // n8n canvas root node UUID — collides with organization API root param; LLM should not pass this
+  'root', // n8n canvas root node UUID — collides with organization API root param; LLM should not pass this
   'tool',
   'toolName',
   'toolCallId',
-  'operation',  // unified tool routing field — must not reach API bodies (defense-in-depth)
+  'operation', // unified tool routing field — must not reach API bodies (defense-in-depth)
 ]);

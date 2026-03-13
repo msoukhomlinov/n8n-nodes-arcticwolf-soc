@@ -1,10 +1,19 @@
 import type { INodeProperties } from 'n8n-workflow';
-import { getManyTicketsOperationOption, getManyTicketsOperationFields } from './listTickets.operation.js';
+import {
+  getManyTicketsOperationOption,
+  getManyTicketsOperationFields,
+} from './listTickets.operation.js';
 import { getTicketOperationOption, getTicketOperationFields } from './getTicket.operation.js';
 import { closeTicketOperationOption, closeTicketOperationFields } from './closeTicket.operation.js';
 import { addCommentOperationOption, addCommentOperationFields } from './addComment.operation.js';
-import { getManyCommentsOperationOption, getManyCommentsOperationFields } from './comment.getMany.operation.js';
-import { getCommentOperationOption, getCommentOperationFields } from './comment.getComment.operation.js';
+import {
+  getManyCommentsOperationOption,
+  getManyCommentsOperationFields,
+} from './comment.getMany.operation.js';
+import {
+  getCommentOperationOption,
+  getCommentOperationFields,
+} from './comment.getComment.operation.js';
 import {
   getManyOrganizationsOperationOption,
   getManyOrganizationsOperationFields,
@@ -29,11 +38,7 @@ export const arcticWolfSocNodeProperties: INodeProperties[] = [
     name: 'operation',
     type: 'options',
     noDataExpression: true,
-    options: [
-      getManyTicketsOperationOption,
-      getTicketOperationOption,
-      closeTicketOperationOption,
-    ],
+    options: [getManyTicketsOperationOption, getTicketOperationOption, closeTicketOperationOption],
     default: 'getMany',
     displayOptions: {
       show: {
@@ -47,11 +52,7 @@ export const arcticWolfSocNodeProperties: INodeProperties[] = [
     name: 'operation',
     type: 'options',
     noDataExpression: true,
-    options: [
-      getManyCommentsOperationOption,
-      getCommentOperationOption,
-      addCommentOperationOption,
-    ],
+    options: [getManyCommentsOperationOption, getCommentOperationOption, addCommentOperationOption],
     default: 'getMany',
     displayOptions: {
       show: {

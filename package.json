@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-arcticwolf-soc",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "n8n community node for Arctic Wolf SOC (Ticket API & Organizations API)",
   "author": "Max Soukhomlinov",
   "license": "MIT",
@@ -79,5 +79,3 @@
     ]
   }
 }
-
-

@@ -1,7 +1,6 @@
 import type { INodeProperties } from 'n8n-workflow';
 
-const EXPRESSIONS_LINK =
-  '<a href="https://docs.n8n.io/code/expressions/">expression</a>';
+const EXPRESSIONS_LINK = '<a href="https://docs.n8n.io/code/expressions/">expression</a>';
 
 /**
  * Organization UUID field for ticket/ticketComment operations.
@@ -9,7 +8,11 @@ const EXPRESSIONS_LINK =
  * @param description  Leading sentence describing what the org is for (no trailing space needed)
  * @param resource  The resource value (default: 'ticket')
  */
-export function makeOrganizationUuidField(operation: string, description: string, resource = 'ticket'): INodeProperties {
+export function makeOrganizationUuidField(
+  operation: string,
+  description: string,
+  resource = 'ticket',
+): INodeProperties {
   return {
     displayName: 'Organization Name or ID',
     name: 'organizationUuid',
@@ -28,7 +31,11 @@ export function makeOrganizationUuidField(operation: string, description: string
  * @param description  Description of what the ticket ID is used for
  * @param resource  The resource value (default: 'ticket')
  */
-export function makeTicketIdField(operation: string, description: string, resource = 'ticket'): INodeProperties {
+export function makeTicketIdField(
+  operation: string,
+  description: string,
+  resource = 'ticket',
+): INodeProperties {
   return {
     displayName: 'Ticket ID',
     name: 'ticketId',
@@ -39,4 +46,3 @@ export function makeTicketIdField(operation: string, description: string, resour
     displayOptions: { show: { resource: [resource], operation: [operation] } },
   };
 }
-

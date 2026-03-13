@@ -6,4 +6,3 @@ function buildIcons() {
 
 exports['build:icons'] = buildIcons;
 exports.default = buildIcons;
-

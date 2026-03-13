@@ -9,8 +9,16 @@ export const addCommentOperationOption: INodePropertyOptions = {
 };
 
 export const addCommentOperationFields: INodeProperties[] = [
-  makeOrganizationUuidField('addComment', 'The organization the ticket belongs to.', 'ticketComment'),
-  makeTicketIdField('addComment', 'The numeric ID of the ticket to add a comment to', 'ticketComment'),
+  makeOrganizationUuidField(
+    'addComment',
+    'The organization the ticket belongs to.',
+    'ticketComment',
+  ),
+  makeTicketIdField(
+    'addComment',
+    'The numeric ID of the ticket to add a comment to',
+    'ticketComment',
+  ),
   {
     displayName: 'Comment',
     name: 'body',

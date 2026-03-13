@@ -65,7 +65,10 @@ export function resolveDateRange(
     case 'thisWeek': {
       const dayOfWeek = now.getUTCDay(); // 0=Sunday
       const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-      return { after: utcDayStart(daysAgo(daysToMonday)).toISOString(), before: todayEnd.toISOString() };
+      return {
+        after: utcDayStart(daysAgo(daysToMonday)).toISOString(),
+        before: todayEnd.toISOString(),
+      };
     }
 
     case 'lastWeek': {
@@ -74,7 +77,10 @@ export function resolveDateRange(
       const daysToLastMonday = daysToThisMonday + 7;
       const lastMonday = daysAgo(daysToLastMonday);
       const lastSunday = daysAgo(daysToLastMonday - 6);
-      return { after: utcDayStart(lastMonday).toISOString(), before: utcDayEnd(lastSunday).toISOString() };
+      return {
+        after: utcDayStart(lastMonday).toISOString(),
+        before: utcDayEnd(lastSunday).toISOString(),
+      };
     }
 
     case 'thisMonth': {
@@ -86,7 +92,9 @@ export function resolveDateRange(
       const year = now.getUTCMonth() === 0 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
       const month = now.getUTCMonth() === 0 ? 11 : now.getUTCMonth() - 1;
       const lastMonthStart = new Date(Date.UTC(year, month, 1));
-      const lastMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0, 23, 59, 59, 999));
+      const lastMonthEnd = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0, 23, 59, 59, 999),
+      );
       return { after: lastMonthStart.toISOString(), before: lastMonthEnd.toISOString() };
     }
 

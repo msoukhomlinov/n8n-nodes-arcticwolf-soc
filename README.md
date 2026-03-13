@@ -20,7 +20,7 @@ npm install n8n-nodes-arcticwolf-soc
 ### Ticket
 
 | Operation    | Description                                       |
-|--------------|---------------------------------------------------|
+| ------------ | ------------------------------------------------- |
 | Get Many     | Retrieve tickets for an organization with filters |
 | Get Ticket   | Retrieve a single ticket by numeric ID            |
 | Close Ticket | Close a ticket, optionally adding a comment       |
@@ -29,17 +29,17 @@ npm install n8n-nodes-arcticwolf-soc
 
 ### Ticket Comment
 
-| Operation   | Description                                                |
-|-------------|------------------------------------------------------------|
-| Get Many    | Retrieve all comments on a ticket                         |
-| Get Comment | Retrieve a single comment by ID                           |
-| Add Comment | Add a comment to an existing ticket                       |
+| Operation   | Description                         |
+| ----------- | ----------------------------------- |
+| Get Many    | Retrieve all comments on a ticket   |
+| Get Comment | Retrieve a single comment by ID     |
+| Add Comment | Add a comment to an existing ticket |
 
 ### Organization
 
-| Operation | Description                                           |
-|-----------|-------------------------------------------------------|
-| Get Many  | Retrieve all organizations accessible to you          |
+| Operation | Description                                  |
+| --------- | -------------------------------------------- |
+| Get Many  | Retrieve all organizations accessible to you |
 
 **Get Many filters:** optionally scope results to child organizations of a given root organization UUID.
 

@@ -26,13 +26,43 @@ const runtimeSchemas = getRuntimeSchemaBuilders(runtimeZod);
 // MCP annotations per operation — future-ready for when DynamicStructuredTool accepts them.
 export const MCP_ANNOTATIONS_BY_OPERATION: Record<
   string,
-  { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean; openWorldHint: boolean }
+  {
+    readOnlyHint: boolean;
+    destructiveHint: boolean;
+    idempotentHint: boolean;
+    openWorldHint: boolean;
+  }
 > = {
-  getMany: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  getTicket: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  getComment: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  closeTicket: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  addComment: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  getMany: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  getTicket: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  getComment: {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  closeTicket: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  addComment: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
 };
 
 function computeMcpAnnotations(enabledOperations: string[]) {
@@ -117,7 +147,8 @@ export class ArcticWolfSocAiTools implements INodeType {
         this: ILoadOptionsFunctions,
       ): Promise<INodePropertyOptions[]> {
         const resource = this.getCurrentNodeParameter('resource') as string;
-        const allowWrite = (this.getCurrentNodeParameter('allowWriteOperations') ?? false) as boolean;
+        const allowWrite = (this.getCurrentNodeParameter('allowWriteOperations') ??
+          false) as boolean;
         if (!resource) return [];
         const config = RESOURCE_OPERATIONS[resource];
         if (!config) return [];
@@ -213,7 +244,10 @@ export class ArcticWolfSocAiTools implements INodeType {
               ERROR_TYPES.INVALID_OPERATION,
               'Missing or unsupported operation for this tool call.',
               'Use one of the allowed operations: ' + enabledOperations.join(', '),
-              { providedOperation: operationFromArgs ?? null, allowedOperations: enabledOperations },
+              {
+                providedOperation: operationFromArgs ?? null,
+                allowedOperations: enabledOperations,
+              },
             ),
           );
         }
@@ -244,11 +278,7 @@ export class ArcticWolfSocAiTools implements INodeType {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const resource = this.getNodeParameter('resource', 0, '') as string;
     const operations = this.getNodeParameter('operations', 0, []) as string[];
-    const allowWriteOperations = this.getNodeParameter(
-      'allowWriteOperations',
-      0,
-      false,
-    ) as boolean;
+    const allowWriteOperations = this.getNodeParameter('allowWriteOperations', 0, false) as boolean;
 
     const items = this.getInputData();
     const firstItemTool = items[0]?.json?.['tool'] as string | undefined;
@@ -308,7 +338,10 @@ export class ArcticWolfSocAiTools implements INodeType {
           `Write operation '${requestedOp}' is not allowed. Enable "Allow Write Operations" in the node configuration.`,
           'Enable "Allow Write Operations" in the node configuration, then retry.',
         );
-        returnData.push({ json: envelope as unknown as IDataObject, pairedItem: { item: itemIndex } });
+        returnData.push({
+          json: envelope as unknown as IDataObject,
+          pairedItem: { item: itemIndex },
+        });
         continue;
       }
 
@@ -321,7 +354,10 @@ export class ArcticWolfSocAiTools implements INodeType {
           'Use one of the allowed operations: ' + effectiveOps.join(', '),
           { providedOperation: requestedOp ?? null, allowedOperations: effectiveOps },
         );
-        returnData.push({ json: envelope as unknown as IDataObject, pairedItem: { item: itemIndex } });
+        returnData.push({
+          json: envelope as unknown as IDataObject,
+          pairedItem: { item: itemIndex },
+        });
         continue;
       }
 

@@ -40,9 +40,7 @@ export function getGetManyTicketsSchema() {
     type: z
       .enum(TICKET_TYPES)
       .optional()
-      .describe(
-        'Filter by type: QUESTION, INCIDENT, PROBLEM, or TASK. Omit to return all types.',
-      ),
+      .describe('Filter by type: QUESTION, INCIDENT, PROBLEM, or TASK. Omit to return all types.'),
     assigneeByEmail: z
       .string()
       .email()
@@ -173,10 +171,7 @@ const AW_OP_LABELS: Record<string, string> = {
   addComment: 'Add Comment',
 };
 
-function getSchemaForOperation(
-  resource: string,
-  operation: string,
-): z.ZodObject<z.ZodRawShape> {
+function getSchemaForOperation(resource: string, operation: string): z.ZodObject<z.ZodRawShape> {
   switch (`${resource}.${operation}`) {
     case 'ticket.getMany':
       return getGetManyTicketsSchema();
@@ -227,7 +222,8 @@ export function buildUnifiedSchema(
 
   for (const [field, fieldSchema] of fieldSources.entries()) {
     const opsForField = Array.from(fieldOps.get(field) ?? []);
-    const baseDescription = (fieldSchema as z.ZodTypeAny & { description?: string }).description ?? '';
+    const baseDescription =
+      (fieldSchema as z.ZodTypeAny & { description?: string }).description ?? '';
     const opsDescription = `Used by operations: ${opsForField.map((op) => AW_OP_LABELS[op] ?? op).join(', ')}.`;
     const description = baseDescription ? `${baseDescription} ${opsDescription}` : opsDescription;
     mergedShape[field] = fieldSchema.optional().describe(description);
@@ -278,7 +274,11 @@ function toRuntimeZodSchema(schema: any, runtimeZ: RuntimeZod): any {
     }
     case 'ZodNumber': {
       let n = runtimeZ.number();
-      for (const check of (def?.checks as Array<{ kind: string; value: number; inclusive?: boolean }>) ?? []) {
+      for (const check of (def?.checks as Array<{
+        kind: string;
+        value: number;
+        inclusive?: boolean;
+      }>) ?? []) {
         switch (check.kind) {
           case 'int':
             n = n.int();
@@ -314,9 +314,10 @@ function toRuntimeZodSchema(schema: any, runtimeZ: RuntimeZod): any {
       converted = runtimeZ.record(toRuntimeZodSchema(def?.valueType, runtimeZ));
       break;
     case 'ZodObject': {
-      const rawShape = typeof def?.shape === 'function'
-        ? (def.shape as () => Record<string, unknown>)()
-        : (def?.shape as Record<string, unknown>);
+      const rawShape =
+        typeof def?.shape === 'function'
+          ? (def.shape as () => Record<string, unknown>)()
+          : (def?.shape as Record<string, unknown>);
       const runtimeShape: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(rawShape ?? {})) {
         runtimeShape[key] = toRuntimeZodSchema(value, runtimeZ);
@@ -343,7 +344,9 @@ function toRuntimeZodSchema(schema: any, runtimeZ: RuntimeZod): any {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       converted = toRuntimeZodSchema(def?.innerType, runtimeZ).default(
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        typeof def?.defaultValue === 'function' ? (def.defaultValue as () => unknown)() : def?.defaultValue,
+        typeof def?.defaultValue === 'function'
+          ? (def.defaultValue as () => unknown)()
+          : def?.defaultValue,
       );
       break;
     case 'ZodLiteral':

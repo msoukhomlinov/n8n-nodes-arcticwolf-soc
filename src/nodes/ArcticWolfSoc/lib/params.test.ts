@@ -23,7 +23,9 @@ describe('resolveDateRange', () => {
     });
 
     it('custom with both values passes them through unchanged', () => {
-      expect(resolveDateRange('custom', '2025-01-01T00:00:00.000Z', '2025-01-31T23:59:59.999Z')).toEqual({
+      expect(
+        resolveDateRange('custom', '2025-01-01T00:00:00.000Z', '2025-01-31T23:59:59.999Z'),
+      ).toEqual({
         after: '2025-01-01T00:00:00.000Z',
         before: '2025-01-31T23:59:59.999Z',
       });
