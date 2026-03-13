@@ -15,12 +15,42 @@ import { executeArcticWolfSocTool } from './ai-tools/tool-executor.js';
 import { buildUnifiedDescription } from './ai-tools/description-builders.js';
 import { getRuntimeSchemaBuilders } from './ai-tools/schema-generator.js';
 import { RuntimeDynamicStructuredTool, runtimeZod } from './ai-tools/runtime.js';
+import { wrapError, ERROR_TYPES } from './ai-tools/error-formatter.js';
 import { WRITE_OPERATIONS } from './constants.js';
 import { RESOURCE_OPERATIONS, OP_LABELS } from './operations.registry.js';
 
 // Initialise runtime schema builders once at module load so runtimeZod is
 // resolved before any node instance is created.
 const runtimeSchemas = getRuntimeSchemaBuilders(runtimeZod);
+
+// MCP annotations per operation — future-ready for when DynamicStructuredTool accepts them.
+export const MCP_ANNOTATIONS_BY_OPERATION: Record<
+  string,
+  { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean; openWorldHint: boolean }
+> = {
+  getMany: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  getTicket: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  getComment: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  closeTicket: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  addComment: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+};
+
+function computeMcpAnnotations(enabledOperations: string[]) {
+  return {
+    readOnlyHint: enabledOperations.every(
+      (op) => MCP_ANNOTATIONS_BY_OPERATION[op]?.readOnlyHint ?? true,
+    ),
+    destructiveHint: enabledOperations.some(
+      (op) => MCP_ANNOTATIONS_BY_OPERATION[op]?.destructiveHint ?? false,
+    ),
+    idempotentHint: enabledOperations.every(
+      (op) => MCP_ANNOTATIONS_BY_OPERATION[op]?.idempotentHint ?? false,
+    ),
+    openWorldHint: enabledOperations.some(
+      (op) => MCP_ANNOTATIONS_BY_OPERATION[op]?.openWorldHint ?? false,
+    ),
+  };
+}
 
 export class ArcticWolfSocAiTools implements INodeType {
   description: INodeTypeDescription = {
@@ -144,6 +174,11 @@ export class ArcticWolfSocAiTools implements INodeType {
       referenceUtc,
     );
 
+    // Aggregate MCP annotations from enabled operations (future-ready).
+    // DynamicStructuredTool doesn't accept annotations yet; when it does,
+    // pass mcpAnnotations into the constructor.
+    void computeMcpAnnotations(enabledOperations);
+
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const supplyDataContext = this;
 
@@ -155,22 +190,39 @@ export class ArcticWolfSocAiTools implements INodeType {
       func: async (params: Record<string, unknown>) => {
         // MCP Trigger path: operation comes from params
         const operationFromArgs = params['operation'];
-        const operation = typeof operationFromArgs === 'string' ? operationFromArgs : undefined;
-        if (!operation || !enabledOperations.includes(operation)) {
-          return JSON.stringify({
-            error: true,
-            errorType: 'INVALID_OPERATION',
-            message: 'Missing or unsupported operation for this tool call.',
-            providedOperation: operationFromArgs ?? null,
-            allowedOperations: enabledOperations,
-          });
+        const op = typeof operationFromArgs === 'string' ? operationFromArgs : undefined;
+
+        // Layer 2: write operation guard in func() path
+        if (op && WRITE_OPERATIONS.includes(op) && !allowWriteOperations) {
+          return JSON.stringify(
+            wrapError(
+              resource,
+              op,
+              ERROR_TYPES.WRITE_OPERATION_BLOCKED,
+              `Write operation '${op}' is not allowed. Enable "Allow Write Operations" in the node configuration.`,
+              'Enable "Allow Write Operations" in the node configuration, then retry.',
+            ),
+          );
+        }
+
+        if (!op || !enabledOperations.includes(op)) {
+          return JSON.stringify(
+            wrapError(
+              resource,
+              op ?? 'unknown',
+              ERROR_TYPES.INVALID_OPERATION,
+              'Missing or unsupported operation for this tool call.',
+              'Use one of the allowed operations: ' + enabledOperations.join(', '),
+              { providedOperation: operationFromArgs ?? null, allowedOperations: enabledOperations },
+            ),
+          );
         }
         // Pass params directly — N8N_METADATA_FIELDS in the executor strips 'operation'
         // (and other framework fields) before any API call.
         return executeArcticWolfSocTool(
           supplyDataContext as unknown as IExecuteFunctions,
           resource,
-          operation,
+          op,
           params,
           region,
         );
@@ -246,15 +298,30 @@ export class ArcticWolfSocAiTools implements INodeType {
 
       // Unified tool: operation comes from item.json.operation (set by AI Agent)
       const requestedOp = item.json['operation'] as string | undefined;
+
+      // Layer 2: write operation guard in execute() path
+      if (requestedOp && WRITE_OPERATIONS.includes(requestedOp) && !allowWriteOperations) {
+        const envelope = wrapError(
+          resource,
+          requestedOp,
+          ERROR_TYPES.WRITE_OPERATION_BLOCKED,
+          `Write operation '${requestedOp}' is not allowed. Enable "Allow Write Operations" in the node configuration.`,
+          'Enable "Allow Write Operations" in the node configuration, then retry.',
+        );
+        returnData.push({ json: envelope as unknown as IDataObject, pairedItem: { item: itemIndex } });
+        continue;
+      }
+
       if (!requestedOp || !effectiveOps.includes(requestedOp)) {
-        const errorPayload: IDataObject = {
-          error: true,
-          errorType: 'INVALID_OPERATION',
-          message: 'Missing or unsupported operation for this tool call.',
-          providedOperation: (requestedOp ?? null) as unknown as IDataObject,
-          allowedOperations: effectiveOps as unknown as IDataObject,
-        };
-        returnData.push({ json: errorPayload, pairedItem: { item: itemIndex } });
+        const envelope = wrapError(
+          resource,
+          requestedOp ?? 'unknown',
+          ERROR_TYPES.INVALID_OPERATION,
+          'Missing or unsupported operation for this tool call.',
+          'Use one of the allowed operations: ' + effectiveOps.join(', '),
+          { providedOperation: requestedOp ?? null, allowedOperations: effectiveOps },
+        );
+        returnData.push({ json: envelope as unknown as IDataObject, pairedItem: { item: itemIndex } });
         continue;
       }
 

@@ -4,6 +4,7 @@
 // instanceof checks pass at runtime. Community nodes bundle their own copies of
 // these packages; n8n loads its own copies. JavaScript instanceof fails across
 // module copies, so we must use the same instances n8n uses.
+import { createRequire } from 'module';
 import type { DynamicStructuredTool } from '@langchain/core/tools';
 import type { z as ZodNamespace } from 'zod';
 
@@ -17,25 +18,31 @@ type DynamicStructuredToolCtor = new (fields: {
 
 export type RuntimeZod = typeof ZodNamespace;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getRuntimeRequire(): any {
-  // Anchor: @langchain/classic/agents — always present in n8n's dependency tree.
-  // NOTE: if n8n drops @langchain/classic in a future version, update this anchor
-  // to another package in n8n's tree that depends on @langchain/core.
-  try {
-    const classicAgentsPath = require.resolve('@langchain/classic/agents');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-    const { createRequire } = require('module') as {
-      createRequire: (filename: string) => NodeRequire;
-    };
-    return createRequire(classicAgentsPath);
-  } catch {
-    return require;
+const ANCHOR_CANDIDATES = ['@langchain/classic/agents', 'langchain/agents'];
+
+function getRuntimeRequire(): NodeRequire {
+  const errors: Array<{ anchor: string; message: string }> = [];
+
+  for (const anchor of ANCHOR_CANDIDATES) {
+    try {
+      const anchorPath = require.resolve(anchor);
+      return createRequire(anchorPath);
+    } catch (err) {
+      errors.push({
+        anchor,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
+
+  throw new Error(
+    `Failed to resolve n8n runtime require from any anchor candidate.\n` +
+      errors.map((e) => `  - ${e.anchor}: ${e.message}`).join('\n'),
+  );
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const runtimeRequire = getRuntimeRequire() as (id: string) => any;
+const runtimeRequire = getRuntimeRequire() as NodeRequire & ((id: string) => any);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
 const coreTools = runtimeRequire('@langchain/core/tools') as Record<string, any>;

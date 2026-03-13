@@ -1,6 +1,9 @@
 import type { IDataObject, IExecuteFunctions } from 'n8n-workflow';
 import { requestArcticWolfSoc, getTicketApiBaseUrl, getOrgsApiBaseUrl } from '../lib/transport.js';
 import {
+  wrapSuccess,
+  wrapError,
+  ERROR_TYPES,
   formatApiError,
   formatMissingIdError,
   formatNotFoundError,
@@ -74,7 +77,9 @@ export async function executeArcticWolfSocTool(
             return JSON.stringify(formatNoResultsFound(resource, operation, filtersUsed));
           }
 
-          return JSON.stringify({ results: tickets, count: tickets.length, meta: paginated?.meta });
+          return JSON.stringify(
+            wrapSuccess(resource, operation, { items: tickets, count: tickets.length, meta: paginated?.meta }),
+          );
         }
 
         case 'getTicket': {
@@ -102,7 +107,7 @@ export async function executeArcticWolfSocTool(
               formatNotFoundError(resource, operation, `Ticket ${ticketId}`),
             );
           }
-          return JSON.stringify({ result });
+          return JSON.stringify(wrapSuccess(resource, operation, result));
         }
 
         case 'closeTicket': {
@@ -119,17 +124,19 @@ export async function executeArcticWolfSocTool(
             `/api/v1/organizations/${organizationUuid}/tickets/${ticketId}/close`,
             { body },
           );
-          return JSON.stringify({ success: true, operation: 'closeTicket', result });
+          return JSON.stringify(wrapSuccess(resource, operation, result));
         }
 
         default:
-          return JSON.stringify({
-            error: true,
-            errorType: 'UNSUPPORTED_OPERATION',
-            message: `Unsupported ticket operation: ${operation}`,
-            operation: `${resource}.${operation}`,
-            nextAction: 'Choose a supported operation from the node configuration.',
-          });
+          return JSON.stringify(
+            wrapError(
+              resource,
+              operation,
+              ERROR_TYPES.UNSUPPORTED_OPERATION,
+              `Unsupported ticket operation: ${operation}`,
+              'Choose a supported operation from the node configuration.',
+            ),
+          );
       }
     } else if (resource === 'ticketComment') {
       const organizationUuid = String(params['organizationUuid'] ?? '');
@@ -149,7 +156,7 @@ export async function executeArcticWolfSocTool(
             { qs: { includeComments: true } as IDataObject },
           );
           const comments = (result as { comments?: unknown[] })?.comments ?? [];
-          return JSON.stringify({ results: comments, count: comments.length });
+          return JSON.stringify(wrapSuccess(resource, operation, { items: comments, count: comments.length }));
         }
 
         case 'getComment': {
@@ -171,7 +178,7 @@ export async function executeArcticWolfSocTool(
               formatNotFoundError(resource, operation, `Comment ${commentId}`),
             );
           }
-          return JSON.stringify({ result: comment });
+          return JSON.stringify(wrapSuccess(resource, operation, comment));
         }
 
         case 'addComment': {
@@ -186,23 +193,24 @@ export async function executeArcticWolfSocTool(
             `/api/v1/organizations/${organizationUuid}/tickets/${ticketId}/comments`,
             { body: { body } },
           );
-          return JSON.stringify({ success: true, operation: 'addComment', result });
+          return JSON.stringify(wrapSuccess(resource, operation, result));
         }
 
         default:
-          return JSON.stringify({
-            error: true,
-            errorType: 'UNSUPPORTED_OPERATION',
-            message: `Unsupported ticketComment operation: ${operation}`,
-            operation: `${resource}.${operation}`,
-            nextAction: 'Choose a supported operation from the node configuration.',
-          });
+          return JSON.stringify(
+            wrapError(
+              resource,
+              operation,
+              ERROR_TYPES.UNSUPPORTED_OPERATION,
+              `Unsupported ticketComment operation: ${operation}`,
+              'Choose a supported operation from the node configuration.',
+            ),
+          );
       }
     } else if (resource === 'organization') {
       switch (operation) {
         case 'getMany': {
           const qs: IDataObject = {};
-          if (params['root']) qs['root'] = params['root'] as string;
           const result = await requestArcticWolfSoc.call(
             context,
             'GET',
@@ -211,28 +219,31 @@ export async function executeArcticWolfSocTool(
             { qs },
           );
           const items = Array.isArray(result) ? result : [result];
-          return JSON.stringify({ results: items, count: items.length });
+          return JSON.stringify(wrapSuccess(resource, operation, { items, count: items.length }));
         }
 
         default:
-          return JSON.stringify({
-            error: true,
-            errorType: 'UNSUPPORTED_OPERATION',
-            message: `Unsupported organization operation: ${operation}`,
-            operation: `${resource}.${operation}`,
-            nextAction: 'Choose a supported operation from the node configuration.',
-          });
+          return JSON.stringify(
+            wrapError(
+              resource,
+              operation,
+              ERROR_TYPES.UNSUPPORTED_OPERATION,
+              `Unsupported organization operation: ${operation}`,
+              'Choose a supported operation from the node configuration.',
+            ),
+          );
       }
     }
 
-    return JSON.stringify({
-      error: true,
-      errorType: 'UNSUPPORTED_RESOURCE',
-      message: `Unsupported resource: ${resource}`,
-      operation: `${resource}.${operation}`,
-      nextAction:
+    return JSON.stringify(
+      wrapError(
+        resource,
+        operation,
+        ERROR_TYPES.UNSUPPORTED_RESOURCE,
+        `Unsupported resource: ${resource}`,
         'Choose a supported resource (ticket, ticketComment, organization) from the node configuration.',
-    });
+      ),
+    );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     return JSON.stringify(formatApiError(msg, resource, operation));

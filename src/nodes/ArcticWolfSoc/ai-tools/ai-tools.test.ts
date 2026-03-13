@@ -3,11 +3,15 @@ import { z } from 'zod';
 import { buildUnifiedSchema } from './schema-generator.js';
 import { buildUnifiedDescription } from './description-builders.js';
 import {
+  wrapSuccess,
+  wrapError,
+  ERROR_TYPES,
   formatApiError,
   formatMissingIdError,
   formatNotFoundError,
   formatNoResultsFound,
 } from './error-formatter.js';
+import type { SuccessEnvelope, ErrorEnvelope } from './error-formatter.js';
 import { executeArcticWolfSocTool } from './tool-executor.js';
 
 jest.mock('../lib/transport.js', () => ({
@@ -24,6 +28,51 @@ const transport = require('../lib/transport.js') as {
 };
 
 const mockContext = {} as unknown as IExecuteFunctions;
+
+describe('wrapSuccess / wrapError', () => {
+  it('wrapSuccess returns a valid SuccessEnvelope', () => {
+    const env = wrapSuccess('ticket', 'getMany', { items: [], count: 0 });
+    expect(env.schemaVersion).toBe('1');
+    expect(env.success).toBe(true);
+    expect(env.operation).toBe('ticket.getMany');
+    expect(env.resource).toBe('ticket');
+    expect(env.result).toEqual({ items: [], count: 0 });
+  });
+
+  it('wrapError returns a valid ErrorEnvelope', () => {
+    const env = wrapError('ticket', 'getTicket', ERROR_TYPES.ENTITY_NOT_FOUND, 'Not found', 'Retry', { id: 42 });
+    expect(env.schemaVersion).toBe('1');
+    expect(env.success).toBe(false);
+    expect(env.operation).toBe('ticket.getTicket');
+    expect(env.resource).toBe('ticket');
+    expect(env.error.errorType).toBe('ENTITY_NOT_FOUND');
+    expect(env.error.message).toBe('Not found');
+    expect(env.error.nextAction).toBe('Retry');
+    expect(env.error.context).toEqual({ id: 42 });
+  });
+
+  it('wrapError omits context when not provided', () => {
+    const env = wrapError('ticket', 'getMany', ERROR_TYPES.API_ERROR, 'Oops', 'Retry');
+    expect(env.error.context).toBeUndefined();
+  });
+});
+
+describe('ERROR_TYPES', () => {
+  it('has all expected error type constants', () => {
+    expect(ERROR_TYPES.API_ERROR).toBe('API_ERROR');
+    expect(ERROR_TYPES.ENTITY_NOT_FOUND).toBe('ENTITY_NOT_FOUND');
+    expect(ERROR_TYPES.NO_RESULTS_FOUND).toBe('NO_RESULTS_FOUND');
+    expect(ERROR_TYPES.MISSING_REQUIRED_FIELD).toBe('MISSING_REQUIRED_FIELD');
+    expect(ERROR_TYPES.MISSING_ENTITY_ID).toBe('MISSING_ENTITY_ID');
+    expect(ERROR_TYPES.INVALID_OPERATION).toBe('INVALID_OPERATION');
+    expect(ERROR_TYPES.WRITE_OPERATION_BLOCKED).toBe('WRITE_OPERATION_BLOCKED');
+    expect(ERROR_TYPES.PERMISSION_DENIED).toBe('PERMISSION_DENIED');
+    expect(ERROR_TYPES.VALIDATION_ERROR).toBe('VALIDATION_ERROR');
+    expect(ERROR_TYPES.SERVER_ERROR).toBe('SERVER_ERROR');
+    expect(ERROR_TYPES.UNSUPPORTED_OPERATION).toBe('UNSUPPORTED_OPERATION');
+    expect(ERROR_TYPES.UNSUPPORTED_RESOURCE).toBe('UNSUPPORTED_RESOURCE');
+  });
+});
 
 describe('buildUnifiedSchema', () => {
   describe('operation field', () => {
@@ -191,10 +240,11 @@ describe('buildUnifiedDescription', () => {
 
 describe('error-formatter', () => {
   describe('formatMissingIdError', () => {
-    it('has correct errorType', () => {
+    it('has correct errorType and envelope structure', () => {
       const err = formatMissingIdError('ticket', 'getTicket');
-      expect(err.error).toBe(true);
-      expect(err.errorType).toBe('MISSING_ENTITY_ID');
+      expect(err.success).toBe(false);
+      expect(err.schemaVersion).toBe('1');
+      expect(err.error.errorType).toBe('MISSING_ENTITY_ID');
     });
 
     it('sets operation to resource.operation', () => {
@@ -204,82 +254,99 @@ describe('error-formatter', () => {
 
     it('nextAction for ticket references arcticwolfsoc_ticket getMany', () => {
       const err = formatMissingIdError('ticket', 'getTicket');
-      expect(err.nextAction).toContain('arcticwolfsoc_ticket');
-      expect(err.nextAction).toContain("operation 'getMany'");
+      expect(err.error.nextAction).toContain('arcticwolfsoc_ticket');
+      expect(err.error.nextAction).toContain("operation 'getMany'");
     });
 
     it('nextAction for ticketComment references both arcticwolfsoc_ticket and arcticwolfsoc_ticketComment', () => {
       const err = formatMissingIdError('ticketComment', 'getComment');
-      expect(err.nextAction).toContain('arcticwolfsoc_ticket');
-      expect(err.nextAction).toContain('arcticwolfsoc_ticketComment');
-      expect(err.nextAction).toContain("operation 'getMany'");
+      expect(err.error.nextAction).toContain('arcticwolfsoc_ticket');
+      expect(err.error.nextAction).toContain('arcticwolfsoc_ticketComment');
+      expect(err.error.nextAction).toContain("operation 'getMany'");
     });
   });
 
   describe('formatNotFoundError', () => {
-    it('has correct errorType', () => {
+    it('has correct errorType and envelope structure', () => {
       const err = formatNotFoundError('ticket', 'getTicket', 'Ticket 42');
-      expect(err.error).toBe(true);
-      expect(err.errorType).toBe('ENTITY_NOT_FOUND');
+      expect(err.success).toBe(false);
+      expect(err.schemaVersion).toBe('1');
+      expect(err.error.errorType).toBe('ENTITY_NOT_FOUND');
     });
 
     it('includes entity label in message', () => {
       const err = formatNotFoundError('ticket', 'getTicket', 'Ticket 42');
-      expect(err.message).toContain('Ticket 42');
+      expect(err.error.message).toContain('Ticket 42');
     });
 
     it('nextAction for ticket references arcticwolfsoc_ticket getMany', () => {
       const err = formatNotFoundError('ticket', 'getTicket', 'Ticket 42');
-      expect(err.nextAction).toContain('arcticwolfsoc_ticket');
-      expect(err.nextAction).toContain("operation 'getMany'");
+      expect(err.error.nextAction).toContain('arcticwolfsoc_ticket');
+      expect(err.error.nextAction).toContain("operation 'getMany'");
     });
 
     it('nextAction for ticketComment references arcticwolfsoc_ticketComment getMany', () => {
       const err = formatNotFoundError('ticketComment', 'getComment', 'Comment 7');
-      expect(err.nextAction).toContain('arcticwolfsoc_ticketComment');
-      expect(err.nextAction).toContain("operation 'getMany'");
+      expect(err.error.nextAction).toContain('arcticwolfsoc_ticketComment');
+      expect(err.error.nextAction).toContain("operation 'getMany'");
     });
   });
 
   describe('formatNoResultsFound', () => {
-    it('has correct errorType', () => {
+    it('has correct errorType and envelope structure', () => {
       const err = formatNoResultsFound('ticket', 'getMany', { status: ['OPEN'] });
-      expect(err.error).toBe(true);
-      expect(err.errorType).toBe('NO_RESULTS_FOUND');
+      expect(err.success).toBe(false);
+      expect(err.schemaVersion).toBe('1');
+      expect(err.error.errorType).toBe('NO_RESULTS_FOUND');
     });
 
     it('includes filters in context', () => {
       const filters = { status: ['OPEN'], priority: 'HIGH' };
       const err = formatNoResultsFound('ticket', 'getMany', filters);
-      expect(err.context?.['filtersUsed']).toEqual(filters);
+      expect(err.error.context?.['filtersUsed']).toEqual(filters);
     });
 
     it('includes actionable nextAction', () => {
       const err = formatNoResultsFound('ticket', 'getMany', { status: ['CLOSED'] });
-      expect(err.nextAction).toBeTruthy();
-      expect(err.nextAction.length).toBeGreaterThan(0);
+      expect(err.error.nextAction).toBeTruthy();
+      expect(err.error.nextAction.length).toBeGreaterThan(0);
     });
   });
 
   describe('formatApiError', () => {
     it('maps forbidden to PERMISSION_DENIED', () => {
       const err = formatApiError('forbidden', 'ticket', 'getMany');
-      expect(err.errorType).toBe('PERMISSION_DENIED');
+      expect(err.error.errorType).toBe('PERMISSION_DENIED');
     });
 
     it('maps not found to ENTITY_NOT_FOUND', () => {
       const err = formatApiError('not found', 'ticket', 'getTicket');
-      expect(err.errorType).toBe('ENTITY_NOT_FOUND');
+      expect(err.error.errorType).toBe('ENTITY_NOT_FOUND');
     });
 
-    it('maps missing/required to MISSING_REQUIRED_FIELDS', () => {
+    it('maps validation errors to VALIDATION_ERROR', () => {
+      const err = formatApiError('validation failed for field X', 'ticket', 'closeTicket');
+      expect(err.error.errorType).toBe('VALIDATION_ERROR');
+    });
+
+    it('maps invalid value to VALIDATION_ERROR', () => {
+      const err = formatApiError('invalid value for priority', 'ticket', 'getMany');
+      expect(err.error.errorType).toBe('VALIDATION_ERROR');
+    });
+
+    it('maps unprocessable to VALIDATION_ERROR', () => {
+      const err = formatApiError('unprocessable entity', 'ticket', 'closeTicket');
+      expect(err.error.errorType).toBe('VALIDATION_ERROR');
+    });
+
+    it('maps missing/required to MISSING_REQUIRED_FIELD', () => {
       const err = formatApiError('required field missing', 'ticket', 'closeTicket');
-      expect(err.errorType).toBe('MISSING_REQUIRED_FIELDS');
+      expect(err.error.errorType).toBe('MISSING_REQUIRED_FIELD');
     });
 
     it('defaults to API_ERROR for unknown messages', () => {
       const err = formatApiError('unexpected banana error', 'ticket', 'getMany');
-      expect(err.errorType).toBe('API_ERROR');
+      expect(err.error.errorType).toBe('API_ERROR');
     });
   });
 });
@@ -300,8 +367,10 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid', ticketId: 42 },
           'us001',
         ),
-      ) as { errorType: string };
-      expect(result.errorType).toBe('ENTITY_NOT_FOUND');
+      ) as ErrorEnvelope;
+      expect(result.success).toBe(false);
+      expect(result.schemaVersion).toBe('1');
+      expect(result.error.errorType).toBe('ENTITY_NOT_FOUND');
     });
 
     it('returns ENTITY_NOT_FOUND when API returns empty object', async () => {
@@ -314,8 +383,9 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid', ticketId: 42 },
           'us001',
         ),
-      ) as { errorType: string };
-      expect(result.errorType).toBe('ENTITY_NOT_FOUND');
+      ) as ErrorEnvelope;
+      expect(result.success).toBe(false);
+      expect(result.error.errorType).toBe('ENTITY_NOT_FOUND');
     });
 
     it('returns ENTITY_NOT_FOUND when API returns empty array', async () => {
@@ -328,8 +398,9 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid', ticketId: 42 },
           'us001',
         ),
-      ) as { errorType: string };
-      expect(result.errorType).toBe('ENTITY_NOT_FOUND');
+      ) as ErrorEnvelope;
+      expect(result.success).toBe(false);
+      expect(result.error.errorType).toBe('ENTITY_NOT_FOUND');
     });
 
     it('returns the ticket when API returns a populated object', async () => {
@@ -343,7 +414,9 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid', ticketId: 42 },
           'us001',
         ),
-      ) as { result: unknown };
+      ) as SuccessEnvelope;
+      expect(result.success).toBe(true);
+      expect(result.schemaVersion).toBe('1');
       expect(result.result).toEqual(ticket);
     });
   });
@@ -359,9 +432,10 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid', status: ['OPEN'], priority: 'HIGH' },
           'us001',
         ),
-      ) as { errorType: string; context: { filtersUsed: Record<string, unknown> } };
-      expect(result.errorType).toBe('NO_RESULTS_FOUND');
-      expect(result.context.filtersUsed).toBeDefined();
+      ) as ErrorEnvelope;
+      expect(result.success).toBe(false);
+      expect(result.error.errorType).toBe('NO_RESULTS_FOUND');
+      expect(result.error.context?.['filtersUsed']).toBeDefined();
     });
 
     it('returns empty results without error when no filters are set', async () => {
@@ -374,9 +448,11 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid' },
           'us001',
         ),
-      ) as { results: unknown[]; count: number };
-      expect(result.results).toEqual([]);
-      expect(result.count).toBe(0);
+      ) as SuccessEnvelope;
+      expect(result.success).toBe(true);
+      expect(result.schemaVersion).toBe('1');
+      expect((result.result as { items: unknown[] }).items).toEqual([]);
+      expect((result.result as { count: number }).count).toBe(0);
     });
 
     it('returns results when tickets are found', async () => {
@@ -390,14 +466,15 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid', status: ['OPEN'] },
           'us001',
         ),
-      ) as { results: unknown[]; count: number };
-      expect(result.results).toEqual(tickets);
-      expect(result.count).toBe(2);
+      ) as SuccessEnvelope;
+      expect(result.success).toBe(true);
+      expect((result.result as { items: unknown[] }).items).toEqual(tickets);
+      expect((result.result as { count: number }).count).toBe(2);
     });
   });
 
   describe('ticket.closeTicket', () => {
-    it('returns success on close', async () => {
+    it('returns success envelope on close', async () => {
       transport.requestArcticWolfSoc.mockResolvedValue({ id: 42, status: 'CLOSED' });
       const result = JSON.parse(
         await executeArcticWolfSocTool(
@@ -407,9 +484,10 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid', ticketId: 42 },
           'us001',
         ),
-      ) as { success: boolean; operation: string };
+      ) as SuccessEnvelope;
       expect(result.success).toBe(true);
-      expect(result.operation).toBe('closeTicket');
+      expect(result.schemaVersion).toBe('1');
+      expect(result.operation).toBe('ticket.closeTicket');
     });
 
     it('returns MISSING_ENTITY_ID when ticketId is missing', async () => {
@@ -421,8 +499,9 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid' },
           'us001',
         ),
-      ) as { errorType: string };
-      expect(result.errorType).toBe('MISSING_ENTITY_ID');
+      ) as ErrorEnvelope;
+      expect(result.success).toBe(false);
+      expect(result.error.errorType).toBe('MISSING_ENTITY_ID');
     });
   });
 
@@ -438,9 +517,10 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid', ticketId: 10 },
           'us001',
         ),
-      ) as { results: unknown[]; count: number };
-      expect(result.results).toEqual(comments);
-      expect(result.count).toBe(1);
+      ) as SuccessEnvelope;
+      expect(result.success).toBe(true);
+      expect((result.result as { items: unknown[] }).items).toEqual(comments);
+      expect((result.result as { count: number }).count).toBe(1);
     });
 
     it('returns MISSING_ENTITY_ID when ticketId is missing', async () => {
@@ -452,8 +532,9 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid' },
           'us001',
         ),
-      ) as { errorType: string };
-      expect(result.errorType).toBe('MISSING_ENTITY_ID');
+      ) as ErrorEnvelope;
+      expect(result.success).toBe(false);
+      expect(result.error.errorType).toBe('MISSING_ENTITY_ID');
     });
   });
 
@@ -472,7 +553,8 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid', ticketId: 10, commentId: 7 },
           'us001',
         ),
-      ) as { result: { id: number; body: string } };
+      ) as SuccessEnvelope;
+      expect(result.success).toBe(true);
       expect(result.result).toEqual({ id: 7, body: 'target' });
     });
 
@@ -486,13 +568,14 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid', ticketId: 10, commentId: 99 },
           'us001',
         ),
-      ) as { errorType: string };
-      expect(result.errorType).toBe('ENTITY_NOT_FOUND');
+      ) as ErrorEnvelope;
+      expect(result.success).toBe(false);
+      expect(result.error.errorType).toBe('ENTITY_NOT_FOUND');
     });
   });
 
   describe('ticketComment.addComment', () => {
-    it('returns success after posting comment', async () => {
+    it('returns success envelope after posting comment', async () => {
       transport.requestArcticWolfSoc.mockResolvedValue({ id: 5, body: 'new comment' });
       const result = JSON.parse(
         await executeArcticWolfSocTool(
@@ -502,9 +585,9 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid', ticketId: 10, body: 'new comment' },
           'us001',
         ),
-      ) as { success: boolean; operation: string };
+      ) as SuccessEnvelope;
       expect(result.success).toBe(true);
-      expect(result.operation).toBe('addComment');
+      expect(result.operation).toBe('ticketComment.addComment');
     });
 
     it('returns MISSING_ENTITY_ID when body is absent', async () => {
@@ -516,8 +599,9 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid', ticketId: 10 },
           'us001',
         ),
-      ) as { errorType: string };
-      expect(result.errorType).toBe('MISSING_ENTITY_ID');
+      ) as ErrorEnvelope;
+      expect(result.success).toBe(false);
+      expect(result.error.errorType).toBe('MISSING_ENTITY_ID');
     });
 
     it('returns MISSING_ENTITY_ID when body is empty string', async () => {
@@ -529,8 +613,9 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid', ticketId: 10, body: '   ' },
           'us001',
         ),
-      ) as { errorType: string };
-      expect(result.errorType).toBe('MISSING_ENTITY_ID');
+      ) as ErrorEnvelope;
+      expect(result.success).toBe(false);
+      expect(result.error.errorType).toBe('MISSING_ENTITY_ID');
     });
   });
 
@@ -546,9 +631,10 @@ describe('executeArcticWolfSocTool', () => {
           {},
           'us001',
         ),
-      ) as { results: unknown[]; count: number };
-      expect(result.results).toEqual(orgs);
-      expect(result.count).toBe(1);
+      ) as SuccessEnvelope;
+      expect(result.success).toBe(true);
+      expect((result.result as { items: unknown[] }).items).toEqual(orgs);
+      expect((result.result as { count: number }).count).toBe(1);
     });
 
     it('wraps a non-array response in an array', async () => {
@@ -562,9 +648,10 @@ describe('executeArcticWolfSocTool', () => {
           {},
           'us001',
         ),
-      ) as { results: unknown[]; count: number };
-      expect(result.results).toEqual([org]);
-      expect(result.count).toBe(1);
+      ) as SuccessEnvelope;
+      expect(result.success).toBe(true);
+      expect((result.result as { items: unknown[] }).items).toEqual([org]);
+      expect((result.result as { count: number }).count).toBe(1);
     });
   });
 
@@ -591,20 +678,22 @@ describe('executeArcticWolfSocTool', () => {
     it('returns UNSUPPORTED_OPERATION error for unknown ticket operation', async () => {
       const result = JSON.parse(
         await executeArcticWolfSocTool(mockContext, 'ticket', 'deleteThat', {}, 'us001'),
-      ) as { errorType: string };
-      expect(result.errorType).toBe('UNSUPPORTED_OPERATION');
+      ) as ErrorEnvelope;
+      expect(result.success).toBe(false);
+      expect(result.error.errorType).toBe('UNSUPPORTED_OPERATION');
     });
 
     it('returns UNSUPPORTED_RESOURCE error for unknown resource', async () => {
       const result = JSON.parse(
         await executeArcticWolfSocTool(mockContext, 'invoice', 'getMany', {}, 'us001'),
-      ) as { errorType: string };
-      expect(result.errorType).toBe('UNSUPPORTED_RESOURCE');
+      ) as ErrorEnvelope;
+      expect(result.success).toBe(false);
+      expect(result.error.errorType).toBe('UNSUPPORTED_RESOURCE');
     });
   });
 
   describe('API error handling', () => {
-    it('returns structured error JSON when requestArcticWolfSoc throws', async () => {
+    it('returns structured error envelope when requestArcticWolfSoc throws', async () => {
       transport.requestArcticWolfSoc.mockRejectedValue(new Error('forbidden access'));
       const result = JSON.parse(
         await executeArcticWolfSocTool(
@@ -614,9 +703,10 @@ describe('executeArcticWolfSocTool', () => {
           { organizationUuid: 'org-uuid' },
           'us001',
         ),
-      ) as { error: boolean; errorType: string };
-      expect(result.error).toBe(true);
-      expect(result.errorType).toBe('PERMISSION_DENIED');
+      ) as ErrorEnvelope;
+      expect(result.success).toBe(false);
+      expect(result.schemaVersion).toBe('1');
+      expect(result.error.errorType).toBe('PERMISSION_DENIED');
     });
   });
 });
