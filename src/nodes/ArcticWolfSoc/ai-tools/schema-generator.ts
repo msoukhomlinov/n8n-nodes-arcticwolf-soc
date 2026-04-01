@@ -237,24 +237,49 @@ export function buildUnifiedSchema(
 // so that n8n's instanceof ZodType check passes (MCP Trigger path)
 // ---------------------------------------------------------------------------
 
+// Zod v4/v3 dual-compatible runtime schema converter.
+// Zod v4 uses _def.type ('string'), v3 uses _def.typeName ('ZodString').
+// Check structures differ: v4 uses check._zod.def, v3 uses flat check.kind/check.value.
+// Dual case labels and (check?._zod?.def ?? check) normalization handle both transparently.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toRuntimeZodSchema(schema: any, runtimeZ: RuntimeZod): any {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-  const def = schema?._def as Record<string, unknown> | undefined;
-  const typeName = def?.typeName as string | undefined;
+  const def = schema?._def;
+  // Zod v4 uses _def.type (e.g. 'string'); Zod v3 uses _def.typeName (e.g. 'ZodString')
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+  const typeName = (def?.type ?? def?.typeName) as string | undefined;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let converted: any;
 
   switch (typeName) {
+    // ── String ────────────────────────────────────────────────────────────
+    case 'string': // Zod v4
     case 'ZodString': {
+      // Zod v3
       let s = runtimeZ.string();
-      for (const check of (def?.checks as Array<{ kind: string; value: number }>) ?? []) {
-        switch (check.kind) {
-          case 'min':
-            s = s.min(check.value);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      for (const check of (def?.checks ?? []) as Array<any>) {
+        // Zod v4: check._zod.def.check  |  Zod v3: check.kind
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        const cd = check?._zod?.def ?? check;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const kind = (cd?.check ?? cd?.kind) as string | undefined;
+        switch (kind) {
+          case 'min_length': // Zod v4
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            s = s.min(cd.minimum as number);
             break;
-          case 'max':
-            s = s.max(check.value);
+          case 'max_length': // Zod v4
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            s = s.max(cd.maximum as number);
+            break;
+          case 'min': // Zod v3
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            s = s.min(cd.value as number);
+            break;
+          case 'max': // Zod v3
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            s = s.max(cd.value as number);
             break;
           case 'email':
             s = s.email();
@@ -272,52 +297,104 @@ function toRuntimeZodSchema(schema: any, runtimeZ: RuntimeZod): any {
       converted = s;
       break;
     }
+    // ── Number ────────────────────────────────────────────────────────────
+    case 'number': // Zod v4
     case 'ZodNumber': {
+      // Zod v3
       let n = runtimeZ.number();
-      for (const check of (def?.checks as Array<{
-        kind: string;
-        value: number;
-        inclusive?: boolean;
-      }>) ?? []) {
-        switch (check.kind) {
-          case 'int':
-            n = n.int();
+      let needsInt = false;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+      for (const check of (def?.checks ?? []) as Array<any>) {
+        // Zod v4 int: ZodNumberFormat check has .isInt === true
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        if (check?.isInt === true) {
+          needsInt = true;
+          continue;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        const cd = check?._zod?.def ?? check;
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const kind = (cd?.check ?? cd?.kind) as string | undefined;
+        switch (kind) {
+          case 'int': // Zod v3
+            needsInt = true;
             break;
-          case 'min':
-            n = check.inclusive === false ? n.gt(check.value) : n.min(check.value);
+          case 'greater_than': // Zod v4
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            n = cd.inclusive ? n.min(cd.value as number) : n.gt(cd.value as number);
             break;
-          case 'max':
-            n = check.inclusive === false ? n.lt(check.value) : n.max(check.value);
+          case 'less_than': // Zod v4
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            n = cd.inclusive ? n.max(cd.value as number) : n.lt(cd.value as number);
+            break;
+          case 'min': // Zod v3
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            n = cd.inclusive === false ? n.gt(cd.value as number) : n.min(cd.value as number);
+            break;
+          case 'max': // Zod v3
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            n = cd.inclusive === false ? n.lt(cd.value as number) : n.max(cd.value as number);
             break;
           default:
             break;
         }
       }
+      if (needsInt) n = n.int();
       converted = n;
       break;
     }
-    case 'ZodBoolean':
+    // ── Simple types ──────────────────────────────────────────────────────
+    case 'boolean': // Zod v4
+    case 'ZodBoolean': // Zod v3
       converted = runtimeZ.boolean();
       break;
-    case 'ZodUnknown':
+    case 'unknown': // Zod v4
+    case 'ZodUnknown': // Zod v3
       converted = runtimeZ.unknown();
       break;
-    case 'ZodArray':
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      converted = runtimeZ.array(toRuntimeZodSchema(def?.type, runtimeZ));
+    // ── Array ─────────────────────────────────────────────────────────────
+    // Zod v4: element at _def.element  |  Zod v3: element at _def.type
+    // NOTE: in Zod v4, def.type is the string 'array' — do NOT use it as the element fallback.
+    //       def.element is always populated in Zod v4, so the fallback only fires for Zod v3.
+    case 'array': // Zod v4
+    case 'ZodArray': // Zod v3
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+      converted = runtimeZ.array(toRuntimeZodSchema(def?.element ?? def?.type, runtimeZ));
       break;
-    case 'ZodEnum':
-      converted = runtimeZ.enum(def?.values as [string, ...string[]]);
+    // ── Enum ──────────────────────────────────────────────────────────────
+    // Zod v4: values at schema.options (array) or _def.entries (object)  |  Zod v3: _def.values
+    case 'enum': // Zod v4
+    case 'ZodEnum': {
+      // Zod v3
+      /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
+      const enumVals: string[] =
+        schema.options ??
+        (def?.entries
+          ? Object.values(def.entries as Record<string, string>)
+          : undefined) ??
+        def?.values ??
+        [];
+      /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
+      converted = runtimeZ.enum(enumVals as [string, ...string[]]);
       break;
-    case 'ZodRecord':
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    }
+    // ── Record ────────────────────────────────────────────────────────────
+    case 'record': // Zod v4
+    case 'ZodRecord': // Zod v3
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
       converted = runtimeZ.record(toRuntimeZodSchema(def?.valueType, runtimeZ));
       break;
+    // ── Object ────────────────────────────────────────────────────────────
+    case 'object': // Zod v4
     case 'ZodObject': {
+      // Zod v3
+      // Zod v4: shape is plain object  |  Zod v3: shape is a function
+      /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
       const rawShape =
         typeof def?.shape === 'function'
           ? (def.shape as () => Record<string, unknown>)()
           : (def?.shape as Record<string, unknown>);
+      /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment */
       const runtimeShape: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(rawShape ?? {})) {
         runtimeShape[key] = toRuntimeZodSchema(value, runtimeZ);
@@ -332,31 +409,44 @@ function toRuntimeZodSchema(schema: any, runtimeZ: RuntimeZod): any {
       converted = obj;
       break;
     }
-    case 'ZodOptional':
+    // ── Wrappers ─────────────────────────────────────────────────────────
+    case 'optional': // Zod v4
+    case 'ZodOptional': // Zod v3
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
       converted = toRuntimeZodSchema(def?.innerType, runtimeZ).optional();
       break;
-    case 'ZodNullable':
+    case 'nullable': // Zod v4
+    case 'ZodNullable': // Zod v3
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
       converted = toRuntimeZodSchema(def?.innerType, runtimeZ).nullable();
       break;
-    case 'ZodDefault':
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    case 'default': // Zod v4
+    case 'ZodDefault': // Zod v3
+      // Zod v4: defaultValue is a raw value  |  Zod v3: defaultValue is a function
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
       converted = toRuntimeZodSchema(def?.innerType, runtimeZ).default(
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
         typeof def?.defaultValue === 'function'
           ? (def.defaultValue as () => unknown)()
           : def?.defaultValue,
       );
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
       break;
-    case 'ZodLiteral':
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      converted = runtimeZ.literal(def?.value as any);
+    // ── Literal ───────────────────────────────────────────────────────────
+    // Zod v4: value(s) at _def.values (array)  |  Zod v3: value at _def.value
+    case 'literal': // Zod v4
+    case 'ZodLiteral': // Zod v3
+      /* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
+      converted = runtimeZ.literal(
+        Array.isArray(def?.values) ? (def.values as unknown[])[0] : def?.value,
+      );
+      /* eslint-enable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
       break;
-    case 'ZodUnion':
+    // ── Union ─────────────────────────────────────────────────────────────
+    case 'union': // Zod v4
+    case 'ZodUnion': // Zod v3
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       converted = runtimeZ.union(
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
         ((def?.options as unknown[]) ?? []).map((o) => toRuntimeZodSchema(o, runtimeZ)) as [
           ReturnType<RuntimeZod['string']>,
           ReturnType<RuntimeZod['string']>,

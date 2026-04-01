@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-04-02
+
+### Fixed
+
+- **`ArcticWolfSocAiTools.node.ts`** — `execute()` now detects tool calls via `item.json.operation` (n8n 2.14+) OR `item.json.tool` (older n8n); previously only checked `tool`, causing all tool invocations on n8n 2.14+ to be misclassified as "Test step" clicks
+- **`ai-tools/schema-generator.ts`** — `toRuntimeZodSchema` now handles both Zod v3 (`_def.typeName`) and Zod v4 (`_def.type`) internal structures with dual case labels and `(check?._zod?.def ?? check)` normalization; previously v4 schemas silently fell through to `runtimeZ.unknown()`
+- **`ai-tools/description-builders.ts`** — ticket getMany description now says `items` (matching actual envelope shape) instead of `results`
+
 ## [0.3.1] - 2026-04-02
 
 ### Changed

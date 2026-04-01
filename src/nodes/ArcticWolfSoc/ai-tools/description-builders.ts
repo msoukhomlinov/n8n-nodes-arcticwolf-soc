@@ -20,7 +20,7 @@ export function buildUnifiedDescription(
         return (
           `- getMany: Fetch live tickets. ` +
           `${dateTimeReferenceSnippet(referenceUtc)}` +
-          `Returns { results: Ticket[], meta: { total, offset, limit } }. ` +
+          `Returns { items: Ticket[], count, meta: { total, offset, limit } }. ` +
           `Filters: status (array), priority, type, assigneeByEmail/FirstName/LastName, updatedAfter/Before, createdAfter/Before, limit (default 20, max 100), offset. ` +
           `Call arcticwolfsoc_organization with operation 'getMany' first if organizationUuid is unknown.`
         );

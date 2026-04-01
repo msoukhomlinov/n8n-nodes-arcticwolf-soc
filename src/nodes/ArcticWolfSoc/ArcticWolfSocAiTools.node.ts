@@ -269,10 +269,12 @@ export class ArcticWolfSocAiTools implements INodeType {
   /**
    * execute() is called by n8n for both "Test step" clicks and AI Agent tool invocations.
    *
-   * AI Agent path: item.json contains tool call metadata plus LLM-provided parameters.
-   * The 'tool' field is set to `arcticwolfsoc_${resource}`; 'operation' is the LLM-chosen op.
+   * AI Agent path (n8n 2.14+): item.json contains LLM-provided parameters including
+   * 'operation' but WITHOUT a 'tool' field.
+   * AI Agent path (older n8n): item.json contains 'tool' set to `arcticwolfsoc_${resource}`.
+   * MCP Trigger path: uses func() from supplyData(), never reaches execute().
    *
-   * Test step (no tool field): return an informational stub.
+   * Test step (neither 'tool' nor 'operation' present): return an informational stub.
    */
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
@@ -282,9 +284,11 @@ export class ArcticWolfSocAiTools implements INodeType {
 
     const items = this.getInputData();
     const firstItemTool = items[0]?.json?.['tool'] as string | undefined;
+    const firstItemOperation = items[0]?.json?.['operation'] as string | undefined;
 
-    // No tool field → "Test step" click, not a real AI Agent tool call
-    if (!firstItemTool) {
+    // n8n 2.14+: tool calls arrive via execute() with 'operation' in item.json but no 'tool'.
+    // Older n8n: tool calls have 'tool' field set. Neither present → "Test step" click.
+    if (!firstItemTool && !firstItemOperation) {
       return [
         [
           {
