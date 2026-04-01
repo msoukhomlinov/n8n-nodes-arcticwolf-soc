@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2026-04-02
+
+### Changed
+
+- **`ai-tools/runtime.ts`** — `RuntimeDynamicStructuredTool` and `runtimeZod` exports are now wrapped in JavaScript Proxies so that resolution failures are deferred to tool invocation time instead of failing at module load; ensures the node package always registers in n8n even if the langchain runtime anchor is unavailable; the Proxy target for `RuntimeDynamicStructuredTool` uses `function () {}` (not `{}`) to provide `[[Construct]]` per ECMAScript §10.5.13
+
 ## [0.2.0] - 2026-03-13
 
 ### Changed
