@@ -10,6 +10,8 @@ import {
   formatNoResultsFound,
 } from './error-formatter.js';
 import { N8N_METADATA_FIELDS } from '../constants.js';
+
+const N8N_METADATA_PREFIXES = ['Prompt__'];
 import { buildListTicketsQs } from '../lib/params.js';
 
 export async function executeArcticWolfSocTool(
@@ -24,7 +26,9 @@ export async function executeArcticWolfSocTool(
   // reaches API request bodies regardless of which execution path is used.
   const params: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(rawParams)) {
-    if (!N8N_METADATA_FIELDS.has(key)) params[key] = value;
+    if (N8N_METADATA_FIELDS.has(key)) continue;
+    if (N8N_METADATA_PREFIXES.some((p) => key.startsWith(p))) continue;
+    params[key] = value;
   }
 
   const ticketBaseUrl = getTicketApiBaseUrl(region);
