@@ -70,9 +70,14 @@ Write operations (Close Ticket, Add Comment) are disabled by default and must be
 Failed to load package "n8n-nodes-arcticwolf-soc" Error: Cannot find module '/home/node/.n8n/nodes/node_modules/n8n-nodes-arcticwolf-soc/node_modules/zod/index.cjs'
 ```
 
-**Cause:** In shared/queue-mode n8n deployments (multiple workers sharing one `.n8n/nodes` volume), a concurrent or interrupted `npm install` can leave the nested `node_modules/zod` dependency partially extracted or corrupted. n8n does not re-run `npm install` for packages it considers already present, so the broken install persists across restarts.
+**Cause:** In shared/queue-mode n8n deployments (multiple workers sharing one `.n8n/nodes` volume), a concurrent or interrupted `npm install` can leave the nested `node_modules/zod` dependency partially extracted or corrupted. n8n does not re-run `npm install` for packages it considers already present, so the broken install persists across restarts. This is an install-race condition on the shared volume, not a version-resolution problem — npm's version selection is not in the failure path.
 
-**Fix:** Manually repair the nested `zod` install from inside the package directory:
+**What this package does about it:**
+
+- The `zod` dependency is pinned to an exact version. This is dependency hygiene — it removes version drift as a variable — and is **not** a fix for the install-race condition above. The corruption originally occurred while `zod` was already resolving to the same version.
+- A `postinstall` integrity check (`scripts/verify-zod.js`) runs after any install that executes npm lifecycle scripts — a manual `npm install`, or a Docker image build. If the nested `zod` is missing or truncated, that install **fails loudly with a clear diagnostic and the exact repair command**, instead of deferring to a cryptic `MODULE_NOT_FOUND` deep in Node's resolver when n8n next starts up. It does not prevent corruption; it makes corruption self-diagnosing — **but only for installs that run scripts**. n8n's built-in community-node installer runs npm with `--ignore-scripts=true`, so this check does **not** run for nodes installed via the n8n GUI. For that path, this section's manual fix and the recurrence guidance below are what actually apply.
+
+**Manual fix:** Repair the nested `zod` install from inside the package directory:
 
 ```bash
 cd <path-to-.n8n>/nodes/node_modules/n8n-nodes-arcticwolf-soc
@@ -81,6 +86,11 @@ npm install --no-save --legacy-peer-deps zod@3.25.76
 ```
 
 Then restart n8n (and all workers, if running queue mode).
+
+**Preventing recurrence:** The structural fix is consumer-side and outside this package's control. Do **not** run concurrent or live `npm install` against a shared `.n8n/nodes` volume across multiple queue-mode workers. Instead, either:
+
+- **Serialize the install** — have only the main n8n instance install community nodes, and let workers read the already-populated volume (do not install from every worker at startup); or
+- **Bake community nodes into a custom n8n Docker image** with a deterministic, pinned install step at build time, instead of relying on n8n's live community-node installer at runtime.
 
 ## Development
 
