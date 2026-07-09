@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-arcticwolf-soc",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "n8n community node for Arctic Wolf SOC (Ticket API & Organizations API)",
   "author": "Max Soukhomlinov",
   "license": "MIT",
@@ -70,7 +70,7 @@
   },
   "peerDependencies": {
     "@langchain/core": "*",
-    "n8n-workflow": ">=1.0.0"
+    "n8n-workflow": "*"
   },
   "peerDependenciesMeta": {
     "@langchain/core": {

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.4] - 2026-07-09
+
+### Changed
+- Aligned `peerDependencies.n8n-workflow` to `*` for consistency with other `n8n-nodes-*` packages (#5). No runtime behaviour change.
+
 ## [0.4.3] - 2026-07-09
 
 ### Fixed
