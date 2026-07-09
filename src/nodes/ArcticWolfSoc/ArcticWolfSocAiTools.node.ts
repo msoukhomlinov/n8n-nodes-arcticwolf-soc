@@ -19,8 +19,8 @@ import { wrapError, ERROR_TYPES } from './ai-tools/error-formatter.js';
 import { WRITE_OPERATIONS } from './constants.js';
 import { RESOURCE_OPERATIONS, OP_LABELS } from './operations.registry.js';
 
-// Initialise runtime schema builders once at module load so runtimeZod is
-// resolved before any node instance is created.
+// Initialise runtime schema builders once at module load (runtimeZod proxy is
+// captured by reference; resolution is deferred until supplyData()).
 const runtimeSchemas = getRuntimeSchemaBuilders(runtimeZod);
 
 // MCP annotations per operation — future-ready for when DynamicStructuredTool accepts them.
