@@ -60,6 +60,28 @@ This package also includes an **Arctic Wolf SOC AI Tools** node that exposes all
 
 Write operations (Close Ticket, Add Comment) are disabled by default and must be explicitly enabled with the **Allow Write Operations** toggle.
 
+## Troubleshooting
+
+### n8n fails to load the package: `Cannot find module '.../node_modules/zod/index.cjs'`
+
+**Symptom:**
+
+```
+Failed to load package "n8n-nodes-arcticwolf-soc" Error: Cannot find module '/home/node/.n8n/nodes/node_modules/n8n-nodes-arcticwolf-soc/node_modules/zod/index.cjs'
+```
+
+**Cause:** In shared/queue-mode n8n deployments (multiple workers sharing one `.n8n/nodes` volume), a concurrent or interrupted `npm install` can leave the nested `node_modules/zod` dependency partially extracted or corrupted. n8n does not re-run `npm install` for packages it considers already present, so the broken install persists across restarts.
+
+**Fix:** Manually repair the nested `zod` install from inside the package directory:
+
+```bash
+cd <path-to-.n8n>/nodes/node_modules/n8n-nodes-arcticwolf-soc
+rm -rf node_modules/zod
+npm install --no-save --legacy-peer-deps zod@3.25.76
+```
+
+Then restart n8n (and all workers, if running queue mode).
+
 ## Development
 
 ```bash
